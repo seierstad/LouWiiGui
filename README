@@ -20,7 +20,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 Compiling
 ---------
 LouWiiGui depends on my version of the cwiid library 
-(available at http://github.com/seierstad/cwiid.git).
+(available at http://github.com/seierstad/cwiid).
 
 There is no makefile so far. 
 The program compiles on my computer with this command:
