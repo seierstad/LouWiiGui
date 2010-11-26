@@ -1,0 +1,8 @@
+
+<louwiigui_patch name="Boogie i e">
+	<chord green="true" red="true" blue="true" yellow="false" orange="false" strummer="up" number_of_notes="3">
+		<note pitch="60" velocity="100" delay="0" />
+		<note pitch="67" velocity="100" delay="0" />
+		<note pitch="72" velocity="100" delay="0" />
+	</chord>
+</louwiigui_patch>
