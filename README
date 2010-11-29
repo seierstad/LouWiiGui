@@ -25,5 +25,5 @@ LouWiiGui depends on my version of the cwiid library
 There is no makefile so far. 
 The program compiles on my computer with this command:
 
-gcc -lrt -o louwiigui `pkg-config --cflags --libs jack cwiid alsa` lou.c
+gcc -lrt -o louwiigui `pkg-config --cflags --libs jack cwiid libxml-2.0` lou.c
 
