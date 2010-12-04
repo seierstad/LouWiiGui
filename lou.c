@@ -20,8 +20,8 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <signal.h>
+#include <unistd.h>
 #include <time.h>
 
 #include <jack/jack.h>
@@ -191,6 +191,7 @@ timer_t countdown_id;
 struct itimerspec margin;
 struct itimerspec time_left;
 
+cwiid_wiimote_t *wiimote;	/* wiimote handle */
 cwiid_mesg_callback_t cwiid_callback;
 
 void usage() {
@@ -887,9 +888,28 @@ void init() {
 	stick_zone = STICK_ZONE_UNKNOWN;
 }
 
+void siginthandler(int param) {
+    printf("User pressed Ctrl+C\n");
+	if (client) {
+		jack_deactivate(client);
+		if (output_port) {
+			jack_port_unregister(client, output_port);
+		}
+		jack_client_close(client);
+	}
+	if (wiimote) {
+		cwiid_disable(wiimote, CWIID_FLAG_MESG_IFC);
+		cwiid_close(wiimote);
+	}
+
+    system("stty echo");
+    exit(1);
+}
+
+
 int main(int argc, char *argv[]) {
 	init();
-	cwiid_wiimote_t *wiimote;	/* wiimote handle */
+	
 	struct cwiid_state state;	/* wiimote state */
 	bdaddr_t bdaddr;	/* bluetooth device address */
 	unsigned char mesg = 0;
@@ -950,8 +970,10 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
-	while (1) {
-		sleep(1);
-	}
+    system("stty -echo");
+    signal(SIGINT, siginthandler);
+
+	while (1);
+	return 0;
 }
 
