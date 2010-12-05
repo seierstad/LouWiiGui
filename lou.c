@@ -973,7 +973,9 @@ int main(int argc, char *argv[]) {
     system("stty -echo");
     signal(SIGINT, siginthandler);
 
-	while (1);
+	while (1) {
+		sleep(1);
+	}
 	return 0;
 }
 
