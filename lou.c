@@ -27,7 +27,6 @@
 #include <jack/jack.h>
 #include <jack/midiport.h>
 
-
 #include <bluetooth/bluetooth.h>
 #include <cwiid.h>
 
@@ -36,15 +35,14 @@
 
 #define MY_ENCODING "UTF-8"
 
-
-
 // amount of whammy movement before sending midi
 #define MIDI_PITCH_MAX       0x3FFF
 #define MIDI_PITCH_CENTER    0x2000
 #define MIDI_MODULATION_MAX  0x7F
 
 #define MAX_ACTIVE_NOTES_COUNT 120
-
+#define MAX_QUEUED_NOTES_COUNT 120
+#define MAX_DELAYED_NOTES_COUNT 120
 
 // flags for chord selection
 #define NONE   0x00
@@ -176,6 +174,7 @@ struct chord_t chord[ALL_COLOR_COMBINATIONS];
 unsigned int chord_state = 0;
 
 struct chord_t active_notes;
+struct chord_t queued_notes;
 
 jack_client_t *client;
 jack_port_t *output_port;
@@ -194,8 +193,33 @@ struct itimerspec time_left;
 cwiid_wiimote_t *wiimote;	/* wiimote handle */
 cwiid_mesg_callback_t cwiid_callback;
 
+
+
+// initial attempt to implement delay:
+#define DELAYED_NOTE_TRIGGERED 13
+struct delayed_note_t {
+	struct note_t note;
+	struct itimerspec time;
+	struct sigevent sevent;
+	timer_t timer;
+};
+
+struct delayed_note_t *delayed_notes;
+
+void neio(int sig, siginfo_t *si, void *uc) {
+	struct delayed_note_t * dn;
+	dn = (struct delayed_note_t *) si->si_value.sival_ptr;
+	queued_notes.note[queued_notes.size].velocity = dn->note.velocity;
+	queued_notes.note[queued_notes.size].note_number = dn->note.note_number;
+	queued_notes.size++;
+	dn->note.velocity = 0;
+}
+// end attempt
+
+
+
 void usage() {
-	fprintf(stderr, "neio [btaddr]\n");
+	fprintf(stderr, "louwiigui [filename] [btaddr]\n");
 }
 
 void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
@@ -283,6 +307,7 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
 			touchbar_state = new_touchbar_state;
 		}
 
+		// set stick state and action
 		unsigned char new_stick_state[2];
 		new_stick_state[CWIID_X] = mesg[i].guitar_mesg.stick[CWIID_X];
 		new_stick_state[CWIID_Y] = mesg[i].guitar_mesg.stick[CWIID_Y];
@@ -341,9 +366,6 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
 			stick_zone_acc.value += distance_from_center;
 			
 		}
-		
-		
-
 	}
 }
 
@@ -355,6 +377,67 @@ void err(cwiid_wiimote_t *wiimote, const char *s, va_list ap) {
 	printf("\n");
 }
 
+void note_on(struct note_t note, void* port_buf, int i) {
+	unsigned char* buffer;
+	buffer = jack_midi_event_reserve(port_buf, i, 3);
+	buffer[2] = note.velocity;		/* velocity */
+	buffer[1] = note.note_number;	/* note number */
+	buffer[0] = 0x90;	/* note on */
+	active_notes.note[active_notes.size] = note;
+	active_notes.size++;
+}
+
+void strum_chord(struct chord_t chord, void* port_buf, int i) {
+	int q,r = 0;
+	for (q = 0; q < chord.size; q++) {
+		if (chord.note[q].delay == 0) {
+			note_on(chord.note[q], port_buf, i);
+		} 
+		else {
+			if (chord.note[q].velocity > 0) {
+				while (delayed_notes[r].note.velocity != 0) {
+					r++;
+				}
+				delayed_notes[r].note = chord.note[q];
+				delayed_notes[r].sevent.sigev_signo = SIGUSR1;
+				delayed_notes[r].sevent.sigev_notify = SIGEV_SIGNAL;
+				delayed_notes[r].sevent.sigev_value.sival_ptr = &(delayed_notes[r]);
+
+				timer_create(CLOCK_MONOTONIC, &(delayed_notes[r].sevent), &(delayed_notes[r].timer));
+
+				delayed_notes[r].note.velocity = chord.note[q].velocity;
+				delayed_notes[r].note.note_number = chord.note[q].note_number;
+				delayed_notes[r].time.it_value.tv_sec = chord.note[q].delay / 1000;
+				delayed_notes[r].time.it_value.tv_nsec = (chord.note[q].delay * 1000000) % 1000000000;
+				delayed_notes[r].time.it_interval.tv_sec = 0;
+				delayed_notes[r].time.it_interval.tv_nsec = 0;
+
+				timer_settime(delayed_notes[r].timer, 0, &(delayed_notes[r].time), NULL);
+			}
+		}
+	}
+}
+
+void mute(void *port_buf, int i) {
+	unsigned char* buffer;
+
+	int j;
+	for(j=0; j < MAX_DELAYED_NOTES_COUNT; j++){
+		if (delayed_notes[j].note.velocity != 0) {
+			timer_delete(delayed_notes[j].timer);
+		}
+		delayed_notes[j].note.velocity = 0;
+	}
+	queued_notes.size = 0;
+	while(active_notes.size > 0) {
+		buffer = jack_midi_event_reserve(port_buf, i, 3);
+		buffer[2] = active_notes.note[active_notes.size - 1].velocity;		/* velocity */
+		buffer[1] = active_notes.note[active_notes.size - 1].note_number;	/* note number */
+		buffer[0] = 0x80;	/* note off */
+		active_notes.size--;
+	}
+}
+
 int process(jack_nframes_t nframes, void *arg) {
 	int i,j;
 	void* port_buf = jack_port_get_buffer(output_port, nframes);
@@ -363,35 +446,19 @@ int process(jack_nframes_t nframes, void *arg) {
 	/*memset(buffer, 0, nframes*sizeof(jack_default_audio_sample_t));*/
 
 
-	for(i=0; i<nframes; i++)
-	{
+	for(i=0; i<nframes; i++) {
+		while(queued_notes.size > 0) {
+			note_on(queued_notes.note[queued_notes.size - 1], port_buf, i);
+			queued_notes.size--;
+		}
 		if (strummer_action != STRUMMER_ACTION_NONE) {
-
 			if (strummer_action == STRUMMER_ACTION_MID_DOWN || strummer_action == STRUMMER_ACTION_MID_UP) {
-				int q;
-				for (q = 0; q < chord[chord_state].size; q++) {
-					buffer = jack_midi_event_reserve(port_buf, i, 3);
-					buffer[2] = chord[chord_state].note[q].velocity;		/* velocity */
-					buffer[1] = chord[chord_state].note[q].note_number;	/* note number */
-					buffer[0] = 0x90;	/* note on */
-					
-					active_notes.note[active_notes.size] = chord[chord_state].note[q];
-					active_notes.size++;
-				}
+				strum_chord(chord[chord_state], port_buf, i);
 				strummer_action = STRUMMER_ACTION_NONE;
 			}
-			else 
-			{
+			else {
 				if (strummer_state != STRUMMER_STATE_SUSTAINED) {
-					int q;
-					while(active_notes.size > 0) {
-						buffer = jack_midi_event_reserve(port_buf, i, 3);
-						buffer[2] = active_notes.note[active_notes.size - 1].velocity;		/* velocity */
-						buffer[1] = active_notes.note[active_notes.size - 1].note_number;	/* note number */
-						buffer[0] = 0x80;	/* note off */
-
-						active_notes.size--;
-					}
+					mute(port_buf, i);
 					strummer_action = STRUMMER_ACTION_NONE;
 				}
 			}
@@ -418,10 +485,10 @@ int process(jack_nframes_t nframes, void *arg) {
 			touchbar_action = TOUCHBAR_ACTION_NONE;
 		}
 		if (stick_action != STICK_ACTION_NONE) {
+
 			printf("stick_action!\n");
 			stick_action = STICK_ACTION_NONE;
 		}
-
 	}
 	return 0;
 }
@@ -644,7 +711,6 @@ void readPatchFromFile (const char *file) {
 					if (xmlGetProp(chord_element, "number_of_notes")) {
 						sscanf(xmlGetProp(chord_element, "number_of_notes"), "%d", &number_of_notes);
 					}
-					printf("neio: %d, %d noter\n", chord_index, number_of_notes);
 
 					chord[chord_index].size = number_of_notes;
 					chord[chord_index].note = malloc(chord[chord_index].size * sizeof(chord->note));
@@ -691,170 +757,8 @@ void readPatchFromFile (const char *file) {
     xmlCleanupParser();
 }
 
-
-void init_program() {
-	chord[GREEN].size = 1;
-	chord[GREEN].note = malloc(1 * sizeof(chord->note));
-	chord[GREEN].note[0].note_number = 52;
-	chord[GREEN].note[0].velocity = 110;
-
-	chord[GREEN | RED].size = 3;
-	chord[GREEN | RED].note = malloc(chord[GREEN | RED].size * sizeof(chord->note));
-	chord[GREEN | RED].note[0].note_number = 52;
-	chord[GREEN | RED].note[0].velocity = 100;
-	chord[GREEN | RED].note[1].note_number = 59;
-	chord[GREEN | RED].note[1].velocity = 110;
-	chord[GREEN | RED].note[2].note_number = 64;
-	chord[GREEN | RED].note[2].velocity = 110;
-
-	chord[GREEN | YELLOW].size = 3;
-	chord[GREEN | YELLOW].note = malloc(chord[GREEN | YELLOW].size * sizeof(chord->note));
-	chord[GREEN | YELLOW].note[0].note_number = 52;
-	chord[GREEN | YELLOW].note[0].velocity = 100;
-	chord[GREEN | YELLOW].note[1].note_number = 61;
-	chord[GREEN | YELLOW].note[1].velocity = 110;
-	chord[GREEN | YELLOW].note[2].note_number = 64;
-	chord[GREEN | YELLOW].note[2].velocity = 110;
-
-
-	chord[GREEN | BLUE].size = 3;
-	chord[GREEN | BLUE].note = malloc(chord[GREEN | BLUE].size * sizeof(chord->note));
-	chord[GREEN | BLUE].note[0].note_number = 52;
-	chord[GREEN | BLUE].note[0].velocity = 100;
-	chord[GREEN | BLUE].note[1].note_number = 62;
-	chord[GREEN | BLUE].note[1].velocity = 110;
-	chord[GREEN | BLUE].note[2].note_number = 64;
-	chord[GREEN | BLUE].note[2].velocity = 110;
-
-	chord[GREEN | RED | YELLOW].size = 4;
-	chord[GREEN | RED | YELLOW].note = malloc(chord[GREEN | RED | YELLOW].size * sizeof(chord->note));
-	chord[GREEN | RED | YELLOW].note[0].note_number = 52;
-	chord[GREEN | RED | YELLOW].note[0].velocity = 100;
-	chord[GREEN | RED | YELLOW].note[1].note_number = 59;
-	chord[GREEN | RED | YELLOW].note[1].velocity = 110;
-	chord[GREEN | RED | YELLOW].note[2].note_number = 64;
-	chord[GREEN | RED | YELLOW].note[2].velocity = 110;
-	chord[GREEN | RED | YELLOW].note[3].note_number = 67;
-	chord[GREEN | RED | YELLOW].note[3].velocity = 110;
-
-	chord[GREEN | RED | BLUE].size = 4;
-	chord[GREEN | RED | BLUE].note = malloc(chord[GREEN | RED | BLUE].size * sizeof(chord->note));
-	chord[GREEN | RED | BLUE].note[0].note_number = 52;
-	chord[GREEN | RED | BLUE].note[0].velocity = 100;
-	chord[GREEN | RED | BLUE].note[1].note_number = 59;
-	chord[GREEN | RED | BLUE].note[1].velocity = 110;
-	chord[GREEN | RED | BLUE].note[2].note_number = 64;
-	chord[GREEN | RED | BLUE].note[2].velocity = 110;
-	chord[GREEN | RED | BLUE].note[3].note_number = 68;
-	chord[GREEN | RED | BLUE].note[3].velocity = 110;
-
-	chord[RED].size = 1;
-	chord[RED].note = malloc(1 * sizeof(chord->note));
-	chord[RED].note[0].note_number = 57;
-	chord[RED].note[0].velocity = 110;
-
-	chord[RED | YELLOW].size = 3;
-	chord[RED | YELLOW].note = malloc(chord[RED | YELLOW].size * sizeof(chord->note));
-	chord[RED | YELLOW].note[0].note_number = 57;
-	chord[RED | YELLOW].note[0].velocity = 100;
-	chord[RED | YELLOW].note[1].note_number = 64;
-	chord[RED | YELLOW].note[1].velocity = 110;
-	chord[RED | YELLOW].note[2].note_number = 69;
-	chord[RED | YELLOW].note[2].velocity = 110;
-
-	chord[RED | BLUE].size = 3;
-	chord[RED | BLUE].note = malloc(chord[RED | BLUE].size * sizeof(chord->note));
-	chord[RED | BLUE].note[0].note_number = 57;
-	chord[RED | BLUE].note[0].velocity = 100;
-	chord[RED | BLUE].note[1].note_number = 66;
-	chord[RED | BLUE].note[1].velocity = 110;
-	chord[RED | BLUE].note[2].note_number = 69;
-	chord[RED | BLUE].note[2].velocity = 110;
-
-	chord[RED | ORANGE].size = 3;
-	chord[RED | ORANGE].note = malloc(chord[RED | ORANGE].size * sizeof(chord->note));
-	chord[RED | ORANGE].note[0].note_number = 57;
-	chord[RED | ORANGE].note[0].velocity = 100;
-	chord[RED | ORANGE].note[1].note_number = 67;
-	chord[RED | ORANGE].note[1].velocity = 110;
-	chord[RED | ORANGE].note[2].note_number = 69;
-	chord[RED | ORANGE].note[2].velocity = 110;
-
-	chord[RED | YELLOW | BLUE].size = 4;
-	chord[RED | YELLOW | BLUE].note = malloc(chord[RED | YELLOW | BLUE].size * sizeof(chord->note));
-	chord[RED | YELLOW | BLUE].note[0].note_number = 57;
-	chord[RED | YELLOW | BLUE].note[0].velocity = 100;
-	chord[RED | YELLOW | BLUE].note[1].note_number = 64;
-	chord[RED | YELLOW | BLUE].note[1].velocity = 110;
-	chord[RED | YELLOW | BLUE].note[2].note_number = 69;
-	chord[RED | YELLOW | BLUE].note[2].velocity = 110;
-	chord[RED | YELLOW | BLUE].note[3].note_number = 72;
-	chord[RED | YELLOW | BLUE].note[3].velocity = 110;
-
-	chord[RED | YELLOW | ORANGE].size = 4;
-	chord[RED | YELLOW | ORANGE].note = malloc(chord[RED | YELLOW | ORANGE].size * sizeof(chord->note));
-	chord[RED | YELLOW | ORANGE].note[0].note_number = 57;
-	chord[RED | YELLOW | ORANGE].note[0].velocity = 100;
-	chord[RED | YELLOW | ORANGE].note[1].note_number = 64;
-	chord[RED | YELLOW | ORANGE].note[1].velocity = 110;
-	chord[RED | YELLOW | ORANGE].note[2].note_number = 69;
-	chord[RED | YELLOW | ORANGE].note[2].velocity = 110;
-	chord[RED | YELLOW | ORANGE].note[3].note_number = 73;
-	chord[RED | YELLOW | ORANGE].note[3].velocity = 110;
-
-	chord[YELLOW].size = 1;
-	chord[YELLOW].note = malloc(chord[YELLOW].size * sizeof(chord->note));
-	chord[YELLOW].note[0].note_number = 59;
-	chord[YELLOW].note[0].velocity = 110;
-
-	chord[YELLOW | BLUE].size = 3;
-	chord[YELLOW | BLUE].note = malloc(chord[YELLOW | BLUE].size * sizeof(chord->note));
-	chord[YELLOW | BLUE].note[0].note_number = 59;
-	chord[YELLOW | BLUE].note[0].velocity = 100;
-	chord[YELLOW | BLUE].note[1].note_number = 66;
-	chord[YELLOW | BLUE].note[1].velocity = 110;
-	chord[YELLOW | BLUE].note[2].note_number = 71;
-	chord[YELLOW | BLUE].note[2].velocity = 110;
-
-	chord[YELLOW | ORANGE].size = 3;
-	chord[YELLOW | ORANGE].note = malloc(chord[YELLOW | ORANGE].size * sizeof(chord->note));
-	chord[YELLOW | ORANGE].note[0].note_number = 59;
-	chord[YELLOW | ORANGE].note[0].velocity = 100;
-	chord[YELLOW | ORANGE].note[1].note_number = 68;
-	chord[YELLOW | ORANGE].note[1].velocity = 110;
-	chord[YELLOW | ORANGE].note[2].note_number = 71;
-	chord[YELLOW | ORANGE].note[2].velocity = 110;
-
-	chord[BLUE].size = 1;
-	chord[BLUE].note = malloc(1 * sizeof(chord->note));
-	chord[BLUE].note[0].note_number = 55;
-	chord[BLUE].note[0].velocity = 110;
-
-	chord[ORANGE].size = 1;
-	chord[ORANGE].note = malloc(1 * sizeof(chord->note));
-	chord[ORANGE].note[0].note_number = 56;
-	chord[ORANGE].note[0].velocity = 110;
-
-	chord[BLUE | ORANGE].size = 3;
-	chord[BLUE | ORANGE].note = malloc(chord[BLUE | ORANGE].size * sizeof(chord->note));
-	chord[BLUE | ORANGE].note[0].note_number = 62;
-	chord[BLUE | ORANGE].note[0].velocity = 100;
-	chord[BLUE | ORANGE].note[1].note_number = 69;
-	chord[BLUE | ORANGE].note[1].velocity = 110;
-	chord[BLUE | ORANGE].note[2].note_number = 74;
-	chord[BLUE | ORANGE].note[2].velocity = 110;
-
-	chord[NONE].size = 3;
-	chord[NONE].note = malloc(chord[NONE].size * sizeof(chord->note));
-	chord[NONE].note[0].note_number = 55;
-	chord[NONE].note[0].velocity = 100;
-	chord[NONE].note[1].note_number = 62;
-	chord[NONE].note[1].velocity = 110;
-	chord[NONE].note[2].note_number = 67;
-	chord[NONE].note[2].velocity = 110;
-}
-
 struct sigevent sigev;
+
 
 void init() {
 	margin.it_value.tv_sec = 0;
@@ -874,6 +778,14 @@ void init() {
 	stick_zone_rotation_clockwise_counter = 0;
 	stick_zone_rotation_counter_clockwise_counter = 0;
 
+	delayed_notes = malloc(MAX_DELAYED_NOTES_COUNT * sizeof(struct delayed_note_t));
+	int i;
+	for(i=0; i < MAX_DELAYED_NOTES_COUNT; i++){
+		delayed_notes[i].note.velocity = 0;
+	}
+
+	queued_notes.size = 0;
+	queued_notes.note = malloc(MAX_QUEUED_NOTES_COUNT * sizeof(chord->note));
 
 	active_notes.size = 0;
 	active_notes.note = malloc(MAX_ACTIVE_NOTES_COUNT * sizeof(chord->note));
@@ -906,7 +818,6 @@ void siginthandler(int param) {
     exit(1);
 }
 
-
 int main(int argc, char *argv[]) {
 	init();
 	
@@ -915,7 +826,22 @@ int main(int argc, char *argv[]) {
 	unsigned char mesg = 0;
 	unsigned char rpt_mode = 0;
 
-//	init_program();
+//experiment with delayed notes goes here 
+//	signal(SIGUSR1, neio);
+//	sigset_t mask;
+	struct sigaction sa;
+	sa.sa_flags = SA_SIGINFO;
+	sa.sa_sigaction = neio;
+//	sigemptyset(&sa.sa_mask);
+	sigaction(SIGUSR1, &sa, NULL);
+
+
+
+	
+
+// end experiment
+
+
 	freePatchMemory();
 	if (argc > 1) {
 		readPatchFromFile(argv[1]);
@@ -970,8 +896,9 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
-    system("stty -echo");
-    signal(SIGINT, siginthandler);
+	system("stty -echo");
+	signal(SIGINT, siginthandler);
+
 
 	while (1) {
 		sleep(1);
