@@ -178,6 +178,7 @@ struct chord_t queued_notes;
 
 jack_client_t *client;
 jack_port_t *output_port;
+jack_port_t *input_port;
 
 unsigned char* note_frqs;
 jack_nframes_t* note_starts;
@@ -827,17 +828,10 @@ int main(int argc, char *argv[]) {
 	unsigned char rpt_mode = 0;
 
 //experiment with delayed notes goes here 
-//	signal(SIGUSR1, neio);
-//	sigset_t mask;
 	struct sigaction sa;
 	sa.sa_flags = SA_SIGINFO;
 	sa.sa_sigaction = neio;
-//	sigemptyset(&sa.sa_mask);
 	sigaction(SIGUSR1, &sa, NULL);
-
-
-
-	
 
 // end experiment
 
@@ -888,6 +882,7 @@ int main(int argc, char *argv[]) {
 	}
 	jack_set_process_callback (client, process, 0);
 	output_port = jack_port_register (client, "Jack MIDI out", JACK_DEFAULT_MIDI_TYPE, JackPortIsOutput, 0);
+//	input_port = jack_port_register (client, "Jack MIDI in", JACK_DEFAULT_MIDI_TYPE, JackPortIsInput, 0);
 	nframes = jack_get_buffer_size(client);
 
 
@@ -896,9 +891,23 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
+				const char **ports;
+        if ((ports = jack_get_ports (client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsInput)) == NULL) {
+                 fprintf(stderr, "Cannot find any physical playback ports\n");
+                 exit(1);
+         }
+ 
+         if (jack_connect (client, jack_port_name(output_port), ports[0])) {
+                 fprintf (stderr, "cannot connect output ports\n");
+         }
+ 
+         free (ports);
+
+
+
+
 	system("stty -echo");
 	signal(SIGINT, siginthandler);
-
 
 	while (1) {
 		sleep(1);
