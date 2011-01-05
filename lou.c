@@ -40,8 +40,13 @@
 #define MIDI_PITCH_CENTER    0x2000
 #define MIDI_MODULATION_MAX  0x7F
 
-#define MAX_ACTIVE_NOTES_COUNT 120
-#define MAX_QUEUED_NOTES_COUNT 120
+#define MIDI_NOTE_OFF        0x80
+#define MIDI_NOTE_ON         0x90
+#define MIDI_CONTROL_CHANGE  0xB0
+#define MIDI_PITCH_WHEEL     0xE0
+
+#define MAX_ACTIVE_NOTES_COUNT  120
+#define MAX_QUEUED_NOTES_COUNT  120
 #define MAX_DELAYED_NOTES_COUNT 120
 
 // flags for chord selection
@@ -194,7 +199,8 @@ struct itimerspec time_left;
 cwiid_wiimote_t *wiimote;	/* wiimote handle */
 cwiid_mesg_callback_t cwiid_callback;
 
-
+int midi_channel;
+int midi_program;
 
 // initial attempt to implement delay:
 #define DELAYED_NOTE_TRIGGERED 13
@@ -383,7 +389,7 @@ void note_on(struct note_t note, void* port_buf, int i) {
 	buffer = jack_midi_event_reserve(port_buf, i, 3);
 	buffer[2] = note.velocity;		/* velocity */
 	buffer[1] = note.note_number;	/* note number */
-	buffer[0] = 0x90;	/* note on */
+	buffer[0] = MIDI_NOTE_ON + midi_channel;	/* note on */
 	active_notes.note[active_notes.size] = note;
 	active_notes.size++;
 }
@@ -434,7 +440,7 @@ void mute(void *port_buf, int i) {
 		buffer = jack_midi_event_reserve(port_buf, i, 3);
 		buffer[2] = active_notes.note[active_notes.size - 1].velocity;		/* velocity */
 		buffer[1] = active_notes.note[active_notes.size - 1].note_number;	/* note number */
-		buffer[0] = 0x80;	/* note off */
+		buffer[0] = MIDI_NOTE_OFF + midi_channel;	/* note off */
 		active_notes.size--;
 	}
 }
@@ -444,8 +450,6 @@ int process(jack_nframes_t nframes, void *arg) {
 	void* port_buf = jack_port_get_buffer(output_port, nframes);
 	unsigned char* buffer;
 	jack_midi_clear_buffer(port_buf);
-	/*memset(buffer, 0, nframes*sizeof(jack_default_audio_sample_t));*/
-
 
 	for(i=0; i<nframes; i++) {
 		while(queued_notes.size > 0) {
@@ -470,7 +474,7 @@ int process(jack_nframes_t nframes, void *arg) {
 			unsigned int pitch_value = MIDI_PITCH_CENTER - pitch_shift;
 			buffer[2] = (pitch_value & 0x3F80) >> 7;  // most significant bits
 			buffer[1] = pitch_value & 0x007f;         // least significant bits
-			buffer[0] = 0xE0;	// pitch wheel change 
+			buffer[0] = MIDI_PITCH_WHEEL + midi_channel;	// pitch wheel change 
 			printf("whammy! %x, %x, %x, desimalt: %d\n", buffer[0], buffer[2], buffer[1], pitch_value);
 			whammy_action = WHAMMY_ACTION_NONE;
 		}
@@ -482,7 +486,7 @@ int process(jack_nframes_t nframes, void *arg) {
 			printf("touchbar action! %d, %x, sent %x\n", touchbar_action, touchbar_state, modulation);
 			buffer[2] = modulation;
 			buffer[1] = 0x1;        // modulation
-			buffer[0] = 0xB0;	// control change 
+			buffer[0] = MIDI_CONTROL_CHANGE + midi_channel;	// control change 
 			touchbar_action = TOUCHBAR_ACTION_NONE;
 		}
 		if (stick_action != STICK_ACTION_NONE) {
@@ -687,62 +691,73 @@ void readPatchFromFile (const char *file) {
 
 		if (!strcmp(cur->name, "patch")) {
       printf ("%s\n", cur->name);
+			if (xmlGetProp(cur, "midi_channel")) {
+				sscanf(xmlGetProp(cur, "midi_channel"), "%d", &midi_channel);
+			}
       cur = cur->children;
+			while (cur->type != XML_ELEMENT_NODE) { 
+				cur = cur->next;
+			}
 			 if (!strcmp(cur->name, "chords")) {
 		    printf ("%s\n", cur->name);
 				chord_element = cur->children;
 				while (chord_element != NULL) {
-					chord_index = 0;
-					number_of_notes = 0;
-					if (xmlGetProp(chord_element, "green")) {
-						chord_index = chord_index | GREEN;
-					}
-					if (xmlGetProp(chord_element, "red")) {
-						chord_index = chord_index | RED;
-					}
-					if (xmlGetProp(chord_element, "yellow")) {
-						chord_index = chord_index | YELLOW;
-					}
-					if (xmlGetProp(chord_element, "blue")) {
-						chord_index = chord_index | BLUE;
-					}
-					if (xmlGetProp(chord_element, "orange")) {
-						chord_index = chord_index | ORANGE;
-					}
-					if (xmlGetProp(chord_element, "number_of_notes")) {
-						sscanf(xmlGetProp(chord_element, "number_of_notes"), "%d", &number_of_notes);
-					}
-
-					chord[chord_index].size = number_of_notes;
-					chord[chord_index].note = malloc(chord[chord_index].size * sizeof(chord->note));
-
-					note_element = chord_element->children;
-					for (note_index = 0; note_element != NULL; note_index++) {
-						note_number = 0;
-						velocity = 0;
-						delay = 0;
-
-						if (xmlGetProp(note_element, "note_number")) {
-							sscanf(xmlGetProp(note_element, "note_number"), "%d", &note_number);
-							printf("note: %d\t", note_number);
+					if (chord_element->type == XML_ELEMENT_NODE) {
+						chord_index = 0;
+						number_of_notes = 0;
+						if (xmlGetProp(chord_element, "green")) {
+							chord_index = chord_index | GREEN;
 						}
-						chord[chord_index].note[note_index].note_number = note_number;
-
-						if (xmlGetProp(note_element, "velocity")) {
-							sscanf(xmlGetProp(note_element, "velocity"), "%d", &velocity);
-							printf("velocity: %d\t", velocity);
+						if (xmlGetProp(chord_element, "red")) {
+							chord_index = chord_index | RED;
 						}
-						chord[chord_index].note[note_index].velocity = velocity;
+						if (xmlGetProp(chord_element, "yellow")) {
+							chord_index = chord_index | YELLOW;
+						}
+						if (xmlGetProp(chord_element, "blue")) {
+							chord_index = chord_index | BLUE;
+						}
+						if (xmlGetProp(chord_element, "orange")) {
+							chord_index = chord_index | ORANGE;
+						}
+						if (xmlGetProp(chord_element, "number_of_notes")) {
+							sscanf(xmlGetProp(chord_element, "number_of_notes"), "%d", &number_of_notes);
+						}
+
+						chord[chord_index].size = number_of_notes;
+						chord[chord_index].note = malloc(chord[chord_index].size * sizeof(chord->note));
+
+						note_element = chord_element->children;
+						note_index = 0;
+						while (note_element != NULL && note_index < number_of_notes) {
+							if (note_element->type == XML_ELEMENT_NODE) {
+								note_number = 0;
+								velocity = 0;
+								delay = 0;
+	
+								if (xmlGetProp(note_element, "note_number")) {
+									sscanf(xmlGetProp(note_element, "note_number"), "%d", &note_number);
+									printf("note: %d\t", note_number);
+								}
+								chord[chord_index].note[note_index].note_number = note_number;
+
+								if (xmlGetProp(note_element, "velocity")) {
+									sscanf(xmlGetProp(note_element, "velocity"), "%d", &velocity);
+									printf("velocity: %d\t", velocity);
+								}
+								chord[chord_index].note[note_index].velocity = velocity;
 						
-						if (xmlGetProp(note_element, "delay")) {
-							sscanf(xmlGetProp(note_element, "delay"), "%d", &delay);
+								if (xmlGetProp(note_element, "delay")) {
+									sscanf(xmlGetProp(note_element, "delay"), "%d", &delay);
+								}
+								chord[chord_index].note[note_index].delay = delay;
+
+								printf("delay: %d\n", delay);
+								note_index++;
+							}
+							note_element = note_element->next;
 						}
-						chord[chord_index].note[note_index].delay = delay;
-
-						printf("delay: %d\n", delay);
-						note_element = note_element->next;
 					}
-
 					chord_element = chord_element->next;
 				}
 			}
@@ -762,6 +777,9 @@ struct sigevent sigev;
 
 
 void init() {
+	midi_channel = 1;
+	midi_program = 3;
+
 	margin.it_value.tv_sec = 0;
 	margin.it_value.tv_nsec = 50000000;
 	margin.it_interval.tv_sec = 0;
@@ -891,17 +909,16 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
-				const char **ports;
-        if ((ports = jack_get_ports (client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsInput)) == NULL) {
-                 fprintf(stderr, "Cannot find any physical playback ports\n");
-                 exit(1);
-         }
- 
-         if (jack_connect (client, jack_port_name(output_port), ports[0])) {
-                 fprintf (stderr, "cannot connect output ports\n");
-         }
- 
-         free (ports);
+	const char **ports;
+  if ((ports = jack_get_ports (client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsInput)) == NULL) {
+    fprintf(stderr, "Cannot find any physical playback ports\n");
+  }
+	else {
+		if (jack_connect (client, jack_port_name(output_port), ports[0])) {
+		  fprintf (stderr, "cannot connect output ports\n");
+		}
+	}
+  free(ports);
 
 
 

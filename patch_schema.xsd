@@ -1,32 +1,43 @@
 <?xml version="1.0"?>
 <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema">
 	<xsd:complexType name="noteType">
-		<xsd:sequence>
-			<xsd:attribute name="note_number" type="xsd:positiveInteger" use="required" />
-			<xsd:attribute name="velocity"    type="xsd:positiveInteger" use="required" />
-		</xsd:sequence>
+		<xsd:attribute name="note_number" type="xsd:positiveInteger" use="required" />
+		<xsd:attribute name="velocity"    type="xsd:positiveInteger" use="required" />
+		<xsd:attribute name="delay"       type="xsd:nonNegativeInteger" use="required" />
 	</xsd:complexType>
-
 	<xsd:complexType name="chordType">
 		<xsd:sequence>
-			<xsd:attribute name="green"  type="xsd:boolean" use="required" />
-			<xsd:attribute name="red"    type="xsd:boolean" use="required" />
-			<xsd:attribute name="yellow" type="xsd:boolean" use="required" />
-			<xsd:attribute name="blue"   type="xsd:boolean" use="required" />
-			<xsd:attribute name="orange" type="xsd:boolean" use="required" />
-			<xsd:attribute name="number_of_notes" type="xsd:positiveInteger" use="required" />
-			<xsd:attribute name="strummer" use="required" default="both">
-				<xsd:simpleType>
-					<xsd:restriction base="xsd:string">
-						<xsd:enumeration value="up" />
-						<xsd:enumeration value="down" />
-						<xsd:enumeration value="both" />
-					</xsd:restriction>
-				</xsd:simpleType>
-			</xsd:attribute>
+			<xsd:element name="note" type="noteType" maxOccurs="unbounded" />
 		</xsd:sequence>
+		<xsd:attribute name="green"  type="xsd:boolean" use="optional" default="false" />
+		<xsd:attribute name="red"    type="xsd:boolean" use="optional" default="false" />
+		<xsd:attribute name="yellow" type="xsd:boolean" use="optional" default="false" />
+		<xsd:attribute name="blue"   type="xsd:boolean" use="optional" default="false" />
+		<xsd:attribute name="orange" type="xsd:boolean" use="optional" default="false" />
+		<xsd:attribute name="number_of_notes" type="xsd:positiveInteger" use="required" />
+		<xsd:attribute name="strummer" use="optional" default="both">
+			<xsd:simpleType>
+				<xsd:restriction base="xsd:string">
+					<xsd:enumeration value="up" />
+					<xsd:enumeration value="down" />
+					<xsd:enumeration value="both" />
+				</xsd:restriction>
+			</xsd:simpleType>
+		</xsd:attribute>
 	</xsd:complexType>
 
-	<xsd:element name="chord" type="chordType" /> 
-	
+	<xsd:complexType name="PatchType">
+		<xsd:sequence>
+			<xsd:element name="chords">
+				<xsd:complexType>
+					<xsd:sequence>
+							<xsd:element name="chord" type="chordType" maxOccurs="unbounded" />
+					</xsd:sequence>
+				</xsd:complexType>
+			</xsd:element>
+		</xsd:sequence>
+		<xsd:attribute name="midi_program" type="xsd:nonNegativeInteger" use="optional" />
+	</xsd:complexType>
+
+	<xsd:element name="patch" type="PatchType" /> 	
 </xsd:schema>
