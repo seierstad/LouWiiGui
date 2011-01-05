@@ -3,7 +3,7 @@
 	<xsd:complexType name="noteType">
 		<xsd:attribute name="note_number" type="xsd:positiveInteger" use="required" />
 		<xsd:attribute name="velocity"    type="xsd:positiveInteger" use="required" />
-		<xsd:attribute name="delay"       type="xsd:nonNegativeInteger" use="required" />
+		<xsd:attribute name="delay"       type="xsd:nonNegativeInteger" use="optional" default="0" />
 	</xsd:complexType>
 	<xsd:complexType name="chordType">
 		<xsd:sequence>
@@ -37,6 +37,7 @@
 			</xsd:element>
 		</xsd:sequence>
 		<xsd:attribute name="midi_program" type="xsd:nonNegativeInteger" use="optional" />
+		<xsd:attribute name="midi_channel" type="xsd:nonNegativeInteger" use="optional" />
 	</xsd:complexType>
 
 	<xsd:element name="patch" type="PatchType" /> 	

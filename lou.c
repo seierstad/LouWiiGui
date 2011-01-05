@@ -534,6 +534,13 @@ void writeCurrentPatchToFile(const char *file) {
         return;
     }
 
+		/* Add an attribute with name "velocity" and value chord[i].note.velocity to note. */
+		rc = xmlTextWriterWriteFormatAttribute(writer, BAD_CAST "midi_channel", "%d", midi_channel);
+		if (rc < 0) {
+			printf("writeCurrentPatchToFile: Error at xmlTextWriterWriteAttribute\n");
+			return;
+		}
+
     /* Start an element named "chords". */
     rc = xmlTextWriterStartElement(writer, BAD_CAST "chords");
     if (rc < 0) {
@@ -615,14 +622,14 @@ void writeCurrentPatchToFile(const char *file) {
 					printf("writeCurrentPatchToFile: Error at xmlTextWriterWriteAttribute\n");
 					return;
 				}
-
-				/* Add an attribute with name "delay" and value chord[i].note.delay to note. */
-				rc = xmlTextWriterWriteFormatAttribute(writer, BAD_CAST "delay", "%d", chord[chord_index].note[note_index].delay);
-				if (rc < 0) {
-					printf("writeCurrentPatchToFile: Error at xmlTextWriterWriteAttribute\n");
-					return;
+				if (chord[chord_index].note[note_index].delay != 0) {
+					/* Add an attribute with name "delay" and value chord[i].note.delay to note. */
+					rc = xmlTextWriterWriteFormatAttribute(writer, BAD_CAST "delay", "%d", chord[chord_index].note[note_index].delay);
+					if (rc < 0) {
+						printf("writeCurrentPatchToFile: Error at xmlTextWriterWriteAttribute\n");
+						return;
+					}
 				}
-
 
 				/* Close the element named note. */
 				rc = xmlTextWriterEndElement(writer);
@@ -860,7 +867,7 @@ int main(int argc, char *argv[]) {
 	} else {
 		readPatchFromFile("testIn.xml");
 	}
-//	writeCurrentPatchToFile("testOut.xml");
+	writeCurrentPatchToFile("testOut.xml");
 	cwiid_set_err(err);
 
 
