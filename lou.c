@@ -30,8 +30,8 @@
 #include <bluetooth/bluetooth.h>
 #include <cwiid.h>
 
-#include <libxml/encoding.h>
-#include <libxml/xmlwriter.h>
+#include <libxml2/libxml/encoding.h>
+#include <libxml2/libxml/xmlwriter.h>
 
 #define MY_ENCODING "UTF-8"
 
@@ -154,6 +154,7 @@ unsigned char stick_state[2];
 unsigned char stick_zone_average_value;
 unsigned char stick_zone_rotation_clockwise_counter;
 unsigned char stick_zone_rotation_counter_clockwise_counter;
+unsigned char last_sent_volume_value;
 
 struct stick_zone_value_accumulator {
 	unsigned int count;
@@ -490,8 +491,29 @@ int process(jack_nframes_t nframes, void *arg) {
 			touchbar_action = TOUCHBAR_ACTION_NONE;
 		}
 		if (stick_action != STICK_ACTION_NONE) {
-
 			printf("stick_action!\n");
+			buffer = jack_midi_event_reserve(port_buf, i, 3);
+			unsigned int volume = last_sent_volume_value;
+			if (stick_action == STICK_ACTION_ROTATE_COUNTER_CLOCKWISE) {
+				volume += stick_zone_average_value / 2 ;
+				if (volume > 127) {
+					volume = 127; 
+				}
+			}
+			else if (stick_action == STICK_ACTION_ROTATE_CLOCKWISE) {
+				if (volume >= stick_zone_average_value / 2) {
+					volume -= stick_zone_average_value / 2;
+				} else {
+					volume = 0;
+				}
+			}
+			if (volume != last_sent_volume_value) {
+				printf("volume: %d\n", volume);
+				buffer[2] = volume;
+				buffer[1] = 0x7;        // volume
+				buffer[0] = MIDI_CONTROL_CHANGE + midi_channel;	// control change
+				last_sent_volume_value = volume;
+			}
 			stick_action = STICK_ACTION_NONE;
 		}
 	}
@@ -714,22 +736,28 @@ void readPatchFromFile (const char *file) {
 						number_of_notes = 0;
 						if (xmlGetProp(chord_element, "green")) {
 							chord_index = chord_index | GREEN;
+							printf("GREEN\t");
 						}
 						if (xmlGetProp(chord_element, "red")) {
 							chord_index = chord_index | RED;
+							printf("RED\t");
 						}
 						if (xmlGetProp(chord_element, "yellow")) {
 							chord_index = chord_index | YELLOW;
+							printf("YELLOW\t");
 						}
 						if (xmlGetProp(chord_element, "blue")) {
 							chord_index = chord_index | BLUE;
+							printf("BLUE\t");
 						}
 						if (xmlGetProp(chord_element, "orange")) {
 							chord_index = chord_index | ORANGE;
+							printf("ORANGE");
 						}
 						if (xmlGetProp(chord_element, "number_of_notes")) {
 							sscanf(xmlGetProp(chord_element, "number_of_notes"), "%d", &number_of_notes);
 						}
+						printf("\n");
 
 						chord[chord_index].size = number_of_notes;
 						chord[chord_index].note = malloc(chord[chord_index].size * sizeof(chord->note));
@@ -784,8 +812,9 @@ struct sigevent sigev;
 
 
 void init() {
-	midi_channel = 1;
-	midi_program = 3;
+	midi_channel = 0;
+	midi_program = 3; 
+	last_sent_volume_value = 127;
 
 	margin.it_value.tv_sec = 0;
 	margin.it_value.tv_nsec = 50000000;
