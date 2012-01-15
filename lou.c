@@ -49,7 +49,7 @@
 #define MAX_QUEUED_NOTES_COUNT  120
 #define MAX_DELAYED_NOTES_COUNT 120
 
-// flags for chord selection
+// flags for chord selection / drums status
 #define NONE   0x00
 #define GREEN  0x01
 #define RED    0x02
@@ -57,6 +57,7 @@
 #define BLUE   0x08
 #define ORANGE 0x10
 #define ALL_COLOR_COMBINATIONS (GREEN | RED | YELLOW | BLUE | ORANGE) + 1
+#define PEDAL  0x20
 
 #define WHAMMY_STATE_UNKNOWN 0xFF
 #define TOUCHBAR_UNTOUCHED 0x0F
@@ -176,8 +177,12 @@ struct chord_t {
 // for all combinations of fret buttons: which notes to trigger
 struct chord_t chord[ALL_COLOR_COMBINATIONS];  
 
-// current fret button state
+// current fret button + drum trigger states
 unsigned int chord_state = 0;
+unsigned int drums_action = 0;
+unsigned int drums_state = 0;
+uint8_t drums_buttons_previous = 0;
+
 
 struct chord_t active_notes;
 struct chord_t queued_notes;
@@ -234,7 +239,60 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
                     union cwiid_mesg mesg[], struct timespec *timestamp){
 	int i, j;
 	int valid_source;
+	uint8_t drums_buttons_change;
+		#define BYTETOBINARYPATTERN "%d%d%d%d%d%d%d%d"
+#define BYTETOBINARY(byte)  \
+  (byte & 0x80 ? 1 : 0), \
+  (byte & 0x40 ? 1 : 0), \
+  (byte & 0x20 ? 1 : 0), \
+  (byte & 0x10 ? 1 : 0), \
+  (byte & 0x08 ? 1 : 0), \
+  (byte & 0x04 ? 1 : 0), \
+  (byte & 0x02 ? 1 : 0), \
+  (byte & 0x01 ? 1 : 0)
+
 	for (i=0; i < mesg_count; i++) {
+	
+		drums_buttons_change = ((uint8_t)mesg[i].drums_mesg.buttons) ^ drums_buttons_previous;
+		drums_buttons_previous = (uint8_t)mesg[i].drums_mesg.buttons;
+
+		if ((mesg[i].drums_mesg.buttons & CWIID_DRUMS_PEDAL & drums_buttons_change) == CWIID_DRUMS_PEDAL 
+//			&& (drums_buttons_change & CWIID_DRUMS_PEDAL) == CWIID_DRUMS_PEDAL
+			) {
+			drums_action |= PEDAL;
+			printf("pedal\n");
+		}
+		if ((mesg[i].drums_mesg.buttons & CWIID_DRUMS_RED & drums_buttons_change) == CWIID_DRUMS_RED 
+//			&& (drums_buttons_change & CWIID_DRUMS_RED) == CWIID_DRUMS_RED
+			) {
+			drums_action |= RED;
+			printf("red\n");
+		}
+		if ((mesg[i].drums_mesg.buttons & CWIID_DRUMS_YELLOW & drums_buttons_change) == CWIID_DRUMS_YELLOW 
+//			&& (drums_buttons_change & CWIID_DRUMS_YELLOW) == CWIID_DRUMS_YELLOW
+			) {
+			drums_action |= YELLOW;
+			printf("yellow\n");
+		}
+		if ((mesg[i].drums_mesg.buttons & CWIID_DRUMS_BLUE & drums_buttons_change) == CWIID_DRUMS_BLUE 
+//		    && (drums_buttons_change & CWIID_DRUMS_BLUE) == CWIID_DRUMS_BLUE
+		    ) {
+			drums_action |= BLUE;
+			printf("blue\n");
+		}
+		if ((mesg[i].drums_mesg.buttons & CWIID_DRUMS_ORANGE & drums_buttons_change) == CWIID_DRUMS_ORANGE 
+//			&& (drums_buttons_change & CWIID_DRUMS_ORANGE) == CWIID_DRUMS_ORANGE
+			) {
+			drums_action |= ORANGE;
+			printf("orange\n");
+		}
+		if ((mesg[i].drums_mesg.buttons & CWIID_DRUMS_GREEN & drums_buttons_change) == CWIID_DRUMS_GREEN 
+//			&& (drums_buttons_change & CWIID_DRUMS_GREEN) == CWIID_DRUMS_GREEN
+			) {
+			drums_action |= GREEN;
+			printf("green\n");
+		}
+		
 		// set strummer_state and strummer_action
 		if (((mesg[i].guitar_mesg.buttons & CWIID_GUITAR_BTN_DOWN) == CWIID_GUITAR_BTN_DOWN) && strummer_state != STRUMMER_STATE_DOWN) {
 			strummer_state = STRUMMER_STATE_DOWN;
@@ -492,7 +550,6 @@ int process(jack_nframes_t nframes, void *arg) {
 		}
 		if (stick_action != STICK_ACTION_NONE) {
 			printf("stick_action!\n");
-			buffer = jack_midi_event_reserve(port_buf, i, 3);
 			unsigned int volume = last_sent_volume_value;
 			if (stick_action == STICK_ACTION_ROTATE_COUNTER_CLOCKWISE) {
 				volume += stick_zone_average_value / 2 ;
@@ -509,6 +566,7 @@ int process(jack_nframes_t nframes, void *arg) {
 			}
 			if (volume != last_sent_volume_value) {
 				printf("volume: %d\n", volume);
+				buffer = jack_midi_event_reserve(port_buf, i, 3);
 				buffer[2] = volume;
 				buffer[1] = 0x7;        // volume
 				buffer[0] = MIDI_CONTROL_CHANGE + midi_channel;	// control change
@@ -516,6 +574,67 @@ int process(jack_nframes_t nframes, void *arg) {
 			}
 			stick_action = STICK_ACTION_NONE;
 		}
+		while (drums_action != 0) {
+			uint8_t send_note_off = 0;
+			buffer = jack_midi_event_reserve(port_buf, i, 3);
+			buffer[2] = 0x7F;		/* velocity */
+			if ((drums_action & RED) == RED) {
+/*				if ((drums_state & RED) == RED) {
+					send_note_off = 1;
+				}
+				drums_state ^= RED;
+*/
+				buffer[1] = 38;	/* note number */
+				drums_action &= ~RED;
+			} else if ((drums_action & YELLOW) == YELLOW) {
+/*				if ((drums_state & YELLOW) == YELLOW) {
+					send_note_off = 1;
+				}
+				drums_state ^= YELLOW;
+*/
+				buffer[1] = 42;	/* note number */
+				drums_action &= ~YELLOW;
+			} else if ((drums_action & BLUE) == BLUE) {
+/*				if ((drums_state & BLUE) == BLUE) {
+					send_note_off = 1;
+				}
+				drums_state ^= BLUE;
+*/
+				buffer[1] = 48;	/* note number */
+				drums_action &= ~BLUE;
+			} else if ((drums_action & ORANGE) == ORANGE) {
+/*				if ((drums_state & ORANGE) == ORANGE) {
+					send_note_off = 1;
+				}
+				drums_state ^= ORANGE;
+*/
+				buffer[1] = 51;	/* note number */
+				drums_action &= ~ORANGE;
+			} else if ((drums_action & GREEN) == GREEN) {
+/*				if ((drums_state & GREEN) == GREEN) {
+					send_note_off = 1;
+				}
+				drums_state ^= GREEN;
+*/
+				buffer[1] = 45;	/* note number */
+				drums_action &= ~GREEN;
+			} else if ((drums_action & PEDAL) == PEDAL) {
+/*				if ((drums_state & PEDAL) == PEDAL) {
+					send_note_off = 1;
+				}
+				drums_state ^= PEDAL;
+*/
+				buffer[1] = 36;	/* note number */
+				drums_action &= ~PEDAL;
+			}
+			
+			if (send_note_off) {
+				buffer[0] = MIDI_NOTE_OFF + 9;	// note off
+			} else {
+				buffer[0] = MIDI_NOTE_ON + 9;	// note on
+			}
+		}
+
 	}
 	return 0;
 }
@@ -825,6 +944,7 @@ void init() {
 	timer_settime(countdown_id, 0, &margin, NULL);
 	timer_gettime(countdown_id, &time_left);
 
+	drums_action = 0;
 	stick_state[CWIID_X] = 0;
 	stick_state[CWIID_Y] = 0;
 	stick_zone_acc.count = 0;
@@ -853,6 +973,8 @@ void init() {
 
 	stick_action = STICK_ACTION_NONE;
 	stick_zone = STICK_ZONE_UNKNOWN;
+	
+	drums_buttons_previous = 0;
 }
 
 void siginthandler(int param) {
