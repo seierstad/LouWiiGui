@@ -1,7 +1,7 @@
 /*
     Copyright (C) 2004 Ian Esten
     Copyright (C) 2010 Erik E. Seierstad
-    
+
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation; either version 2 of the License, or
@@ -175,7 +175,7 @@ struct chord_t {
 };
 
 // for all combinations of fret buttons: which notes to trigger
-struct chord_t chord[ALL_COLOR_COMBINATIONS];  
+struct chord_t chord[ALL_COLOR_COMBINATIONS];
 
 // current fret button + drum trigger states
 unsigned int chord_state = 0;
@@ -252,7 +252,6 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
   (byte & 0x01 ? 1 : 0)
 
 	for (i=0; i < mesg_count; i++) {
-	
 		drums_buttons_change = ((uint8_t)mesg[i].drums_mesg.buttons) ^ drums_buttons_previous;
 		drums_buttons_previous = (uint8_t)mesg[i].drums_mesg.buttons;
 
@@ -292,7 +291,7 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
 			drums_action |= GREEN;
 			printf("green\n");
 		}
-		
+
 		// set strummer_state and strummer_action
 		if (((mesg[i].guitar_mesg.buttons & CWIID_GUITAR_BTN_DOWN) == CWIID_GUITAR_BTN_DOWN) && strummer_state != STRUMMER_STATE_DOWN) {
 			strummer_state = STRUMMER_STATE_DOWN;
@@ -352,7 +351,7 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
 		if (new_touchbar_state != touchbar_state) {
 			if (touchbar_state == TOUCHBAR_UNTOUCHED) {
 				touchbar_action = TOUCHBAR_ACTION_TAP;
-			} 
+			}
 			else if (new_touchbar_state == TOUCHBAR_UNTOUCHED) {
 				touchbar_action = TOUCHBAR_ACTION_RELEASE;
 			}
@@ -362,7 +361,7 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
 				} else {
 					touchbar_action = TOUCHBAR_ACTION_PULLOFF;
 				}
-			} 
+			}
 			else {
 				if (new_touchbar_state <= touchbar_state + TOUCHBAR_SLIDE_MARGIN) {
 					touchbar_action = TOUCHBAR_ACTION_SLIDE_UP;
@@ -401,7 +400,7 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
 				new_stick_zone = STICK_ZONE_7TH;
 			} else if (STICK_ZONE_8(new_stick_state[CWIID_X], new_stick_state[CWIID_Y])) {
 				new_stick_zone = STICK_ZONE_8TH;
-			} 
+			}
 
 			stick_state[CWIID_X] = new_stick_state[CWIID_X];
 			stick_state[CWIID_Y] = new_stick_state[CWIID_Y];
@@ -430,7 +429,6 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
 			}
 			stick_zone_acc.count++;
 			stick_zone_acc.value += distance_from_center;
-			
 		}
 	}
 }
@@ -451,6 +449,7 @@ void note_on(struct note_t note, void* port_buf, int i) {
 	buffer[0] = MIDI_NOTE_ON + midi_channel;	/* note on */
 	active_notes.note[active_notes.size] = note;
 	active_notes.size++;
+	printf("sent note on: %d with velocity: %d", note.note_number, note.velocity);
 }
 
 void strum_chord(struct chord_t chord, void* port_buf, int i) {
@@ -458,7 +457,7 @@ void strum_chord(struct chord_t chord, void* port_buf, int i) {
 	for (q = 0; q < chord.size; q++) {
 		if (chord.note[q].delay == 0) {
 			note_on(chord.note[q], port_buf, i);
-		} 
+		}
 		else {
 			if (chord.note[q].velocity > 0) {
 				while (delayed_notes[r].note.velocity != 0) {
@@ -533,7 +532,7 @@ int process(jack_nframes_t nframes, void *arg) {
 			unsigned int pitch_value = MIDI_PITCH_CENTER - pitch_shift;
 			buffer[2] = (pitch_value & 0x3F80) >> 7;  // most significant bits
 			buffer[1] = pitch_value & 0x007f;         // least significant bits
-			buffer[0] = MIDI_PITCH_WHEEL + midi_channel;	// pitch wheel change 
+			buffer[0] = MIDI_PITCH_WHEEL + midi_channel;	// pitch wheel change
 			printf("whammy! %x, %x, %x, desimalt: %d\n", buffer[0], buffer[2], buffer[1], pitch_value);
 			whammy_action = WHAMMY_ACTION_NONE;
 		}
@@ -541,11 +540,11 @@ int process(jack_nframes_t nframes, void *arg) {
 			buffer = jack_midi_event_reserve(port_buf, i, 3);
 
 			// scale input to output values (5th represents maximum possible input value)
-			unsigned int modulation = (MIDI_MODULATION_MAX * touchbar_state) / CWIID_GUITAR_TOUCHBAR_5TH ; 
+			unsigned int modulation = (MIDI_MODULATION_MAX * touchbar_state) / CWIID_GUITAR_TOUCHBAR_5TH ;
 			printf("touchbar action! %d, %x, sent %x\n", touchbar_action, touchbar_state, modulation);
 			buffer[2] = modulation;
 			buffer[1] = 0x1;        // modulation
-			buffer[0] = MIDI_CONTROL_CHANGE + midi_channel;	// control change 
+			buffer[0] = MIDI_CONTROL_CHANGE + midi_channel;	// control change
 			touchbar_action = TOUCHBAR_ACTION_NONE;
 		}
 		if (stick_action != STICK_ACTION_NONE) {
@@ -554,7 +553,7 @@ int process(jack_nframes_t nframes, void *arg) {
 			if (stick_action == STICK_ACTION_ROTATE_COUNTER_CLOCKWISE) {
 				volume += stick_zone_average_value / 2 ;
 				if (volume > 127) {
-					volume = 127; 
+					volume = 127;
 				}
 			}
 			else if (stick_action == STICK_ACTION_ROTATE_CLOCKWISE) {
@@ -627,7 +626,7 @@ int process(jack_nframes_t nframes, void *arg) {
 				buffer[1] = 36;	/* note number */
 				drums_action &= ~PEDAL;
 			}
-			
+
 			if (send_note_off) {
 				buffer[0] = MIDI_NOTE_OFF + 9;	// note off
 			} else {
@@ -689,7 +688,6 @@ void writeCurrentPatchToFile(const char *file) {
         return;
     }
 
-	
 	for (chord_index = 0; chord_index < ALL_COLOR_COMBINATIONS; chord_index++) {
 		if (chord[chord_index].size > 0) {
 			/* Start an element named "chord" as child of patch. */
@@ -877,7 +875,7 @@ void readPatchFromFile (const char *file) {
 							sscanf(xmlGetProp(chord_element, "number_of_notes"), "%d", &number_of_notes);
 						}
 						printf("\n");
-
+printf("yo! %d", number_of_notes);
 						chord[chord_index].size = number_of_notes;
 						chord[chord_index].note = malloc(chord[chord_index].size * sizeof(chord->note));
 
@@ -888,7 +886,7 @@ void readPatchFromFile (const char *file) {
 								note_number = 0;
 								velocity = 0;
 								delay = 0;
-	
+
 								if (xmlGetProp(note_element, "note_number")) {
 									sscanf(xmlGetProp(note_element, "note_number"), "%d", &note_number);
 									printf("note: %d\t", note_number);
@@ -900,7 +898,7 @@ void readPatchFromFile (const char *file) {
 									printf("velocity: %d\t", velocity);
 								}
 								chord[chord_index].note[note_index].velocity = velocity;
-						
+
 								if (xmlGetProp(note_element, "delay")) {
 									sscanf(xmlGetProp(note_element, "delay"), "%d", &delay);
 								}
@@ -932,7 +930,7 @@ struct sigevent sigev;
 
 void init() {
 	midi_channel = 0;
-	midi_program = 3; 
+	midi_program = 3;
 	last_sent_volume_value = 127;
 
 	margin.it_value.tv_sec = 0;
@@ -973,7 +971,7 @@ void init() {
 
 	stick_action = STICK_ACTION_NONE;
 	stick_zone = STICK_ZONE_UNKNOWN;
-	
+
 	drums_buttons_previous = 0;
 }
 
@@ -997,13 +995,13 @@ void siginthandler(int param) {
 
 int main(int argc, char *argv[]) {
 	init();
-	
+
 	struct cwiid_state state;	/* wiimote state */
 	bdaddr_t bdaddr;	/* bluetooth device address */
 	unsigned char mesg = 0;
 	unsigned char rpt_mode = 0;
 
-//experiment with delayed notes goes here 
+//experiment with delayed notes goes here
 	struct sigaction sa;
 	sa.sa_flags = SA_SIGINFO;
 	sa.sa_sigaction = neio;
@@ -1018,7 +1016,7 @@ int main(int argc, char *argv[]) {
 	} else {
 		readPatchFromFile("testIn.xml");
 	}
-	writeCurrentPatchToFile("testOut.xml");
+//	writeCurrentPatchToFile("testOut.xml");
 	cwiid_set_err(err);
 
 
