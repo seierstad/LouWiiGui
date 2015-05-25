@@ -708,7 +708,7 @@ int main(int argc, char *argv[]) {
 	}
   free(ports);
 
-
+printf("kaci");
 
 
 	system("stty -echo");
