@@ -1,0 +1,98 @@
+
+#include <libxml/encoding.h>
+#include <libxml/xmlwriter.h>
+
+#define MY_ENCODING "UTF-8"
+
+void writeCurrentPatchToFile(const char *file);
+
+void writeCurrentPatchToFile(const char *file) {
+    int rc;
+    xmlTextWriterPtr writer;
+    xmlChar *tmp;
+    xmlDocPtr doc;
+
+    /* Create a new XmlWriter for DOM, with no compression. */
+    writer = xmlNewTextWriterDoc(&doc, 0);
+    if (writer == NULL) {
+        printf("writeCurrentPatchToFile: Error creating the xml writer\n");
+        return;
+    }
+
+    /* Start the document with the xml default for the version,
+     * encoding UTF-8 and the default for the standalone
+     * declaration. */
+    rc = xmlTextWriterStartDocument(writer, NULL, MY_ENCODING, NULL);
+    if (rc < 0) {
+        printf("writeCurrentPatchToFile: Error at xmlTextWriterStartDocument\n");
+        return;
+    }
+
+    /* Start an element named "patch". Since thist is the first
+     * element, this will be the root element of the document. */
+    rc = xmlTextWriterStartElement(writer, BAD_CAST "patch");
+    if (rc < 0) {
+        printf("writeCurrentPatchToFile: Error at xmlTextWriterStartElement\n");
+        return;
+    }
+
+	for (int i = 0; i < ALL_COLOR_COMBINATIONS; i++) {
+		if (chord[i] != NULL) {
+			/* Start an element named "chord" as child of patch. */
+			rc = xmlTextWriterStartElement(writer, BAD_CAST "chord");
+			if (rc < 0) {
+				printf("writeCurrentPatchToFile: Error at xmlTextWriterStartElement\n");
+				return;
+			}
+
+			if (i && GREEN) {
+				/* Add an attribute with name "green" and value "true" to chord. */
+				rc = xmlTextWriterWriteAttribute(writer, BAD_CAST "green", BAD_CAST "true");
+				if (rc < 0) {
+					printf("writeCurrentPatchToFile: Error at xmlTextWriterWriteAttribute\n");
+					return;
+				}
+			}
+			for (int note_index = 0; note_index < chord[i].size; note_index++) {
+				/* Start an element named "note" as child of chord. */
+				rc = xmlTextWriterStartElement(writer, BAD_CAST "note");
+				if (rc < 0) {
+					printf("writeCurrentPatchToFile: Error at xmlTextWriterStartElement\n");
+					return;
+				}
+
+				/* Add an attribute with name "note_number" and value chord[i].note.note_number to chord. */
+				rc = xmlTextWriterWriteAttribute(writer, BAD_CAST "note_number", BAD_CAST chord[i].note.note_number);
+				if (rc < 0) {
+					printf("writeCurrentPatchToFile: Error at xmlTextWriterWriteAttribute\n");
+					return;
+				}
+
+				/* Close the element named note. */
+				rc = xmlTextWriterEndElement(writer);
+				if (rc < 0) {
+					printf("writeCurrentPatchToFile: Error at xmlTextWriterEndElement\n");
+					return;
+				}
+
+		}
+
+	}
+
+    /* Here we could close the elements ORDER and EXAMPLE using the
+     * function xmlTextWriterEndElement, but since we do not want to
+     * write any other elements, we simply call xmlTextWriterEndDocument,
+     * which will do all the work. */
+    rc = xmlTextWriterEndDocument(writer);
+    if (rc < 0) {
+        printf("writeCurrentPatchToFile: Error at xmlTextWriterEndDocument\n");
+        return;
+    }
+
+    xmlFreeTextWriter(writer);
+
+    xmlSaveFileEnc(file, doc, MY_ENCODING);
+
+    xmlFreeDoc(doc);
+}
+
