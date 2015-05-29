@@ -1,23 +1,18 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
 <patch name="test patch" midi_channel="10">
   <chords>
-
     <chord number_of_notes="3">
       <note note_number="55" velocity="100" />
       <note note_number="62" velocity="110" />
       <note note_number="67" velocity="110" />
     </chord>
-
-
     <chord green="true" number_of_notes="1" name="single note E">
       <note note_number="40" velocity="110" />
     </chord>
-
     <chord green="true" red="true" number_of_notes="3">
       <note note_number="40" velocity="100" />
       <note note_number="47" velocity="110" />
       <note note_number="52" velocity="110" />
-      <!-- note note_number="54" velocity="110" / -->
     </chord>
     <chord green="true" yellow="true" number_of_notes="3">
       <note note_number="40" velocity="100" />
@@ -34,17 +29,12 @@
       <note note_number="47" velocity="110" delay="10"/>
       <note note_number="52" velocity="110" delay="30"/>
       <note note_number="55" velocity="110" delay="35"/>
-      <!-- note note_number="71" velocity="110" delay="40"/>
-      <note note_number="76" velocity="110" delay="42"/ -->
     </chord>
-
     <chord green="true" red="true" yellow="true" number_of_notes="4" name="E">
       <note note_number="40" velocity="100" />
       <note note_number="47" velocity="110" delay="10"/>
       <note note_number="52" velocity="110" delay="30"/>
       <note note_number="56" velocity="110" delay="35"/>
-      <!-- note note_number="71" velocity="110" />
-      <note note_number="76" velocity="110" / -->
     </chord>
     <chord green="true" red="true" blue="true" number_of_notes="4" name="Eadd9">
       <note note_number="40" velocity="100" />
@@ -64,7 +54,6 @@
       <note note_number="52" velocity="110" delay="30"/>
       <note note_number="55" velocity="110" delay="35"/>
       <note note_number="62" velocity="110" delay="40"/>
-      <!-- note note_number="76" velocity="110" delay="42"/ -->
     </chord>
     <chord green="true" yellow="true" orange="true" number_of_notes="5" name="EmMaj7">
       <note note_number="40" velocity="100" />
@@ -72,7 +61,6 @@
       <note note_number="52" velocity="110" delay="30"/>
       <note note_number="55" velocity="110" delay="35"/>
       <note note_number="63" velocity="110" delay="40"/>
-      <!-- note note_number="76" velocity="110" delay="42"/ -->
     </chord>
     <chord green="true" blue="true" orange="true" number_of_notes="5" name="E7">
       <note note_number="40" velocity="100" />
@@ -80,16 +68,13 @@
       <note note_number="52" velocity="110" delay="30"/>
       <note note_number="56" velocity="110" delay="35"/>
       <note note_number="62" velocity="110" delay="40"/>
-      <!-- note note_number="76" velocity="110" delay="42"/ -->
     </chord>
-
     <chord green="true" red="true" yellow="true" blue="true" number_of_notes="5" name="EMaj7">
       <note note_number="40" velocity="100" />
       <note note_number="47" velocity="110" delay="10"/>
       <note note_number="52" velocity="110" delay="30"/>
       <note note_number="56" velocity="110" delay="35"/>
       <note note_number="63" velocity="110" delay="40"/>
-      <!-- note note_number="76" velocity="110" delay="42"/ -->
     </chord>
     <chord green="true" red="true" yellow="true" orange="true" number_of_notes="5" name="Em9">
       <note note_number="40" velocity="100" />
@@ -119,12 +104,9 @@
       <note note_number="54" velocity="110" delay="17" />
       <note note_number="59" velocity="110" delay="22" />
     </chord>
-
-    
     <chord red="true" number_of_notes="1" name="single note A">
       <note note_number="45" velocity="110" />
     </chord>
-
     <chord red="true" yellow="true" number_of_notes="3">
       <note note_number="45" velocity="100" />
       <note note_number="52" velocity="110" />
@@ -140,7 +122,6 @@
       <note note_number="55" velocity="110" />
       <note note_number="57" velocity="110" />
     </chord>
-
     <chord red="true" yellow="true" blue="true" number_of_notes="4" name="Am">
       <note note_number="45" velocity="100" />
       <note note_number="52" velocity="110" delay="7"/>
@@ -167,12 +148,9 @@
       <note note_number="61" velocity="110" />
       <note note_number="67" velocity="110" />
     </chord>
-
-
     <chord yellow="true" number_of_notes="1">
       <note note_number="59" velocity="110" />
     </chord>
-
     <chord yellow="true" blue="true" number_of_notes="3">
       <note note_number="59" velocity="100" />
       <note note_number="66" velocity="110" />
@@ -183,18 +161,14 @@
       <note note_number="68" velocity="110" />
       <note note_number="71" velocity="110" />
     </chord>
-
-
     <chord blue="true" number_of_notes="1">
       <note note_number="55" velocity="110" />
     </chord>
-
     <chord blue="true" orange="true" number_of_notes="3">
       <note note_number="62" velocity="100" />
       <note note_number="69" velocity="110" />
       <note note_number="74" velocity="110" />
     </chord>
-
     <chord orange="true" number_of_notes="1">
       <note note_number="56" velocity="110" />
     </chord>
