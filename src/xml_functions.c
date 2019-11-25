@@ -1,3 +1,10 @@
+#include <stddef.h>
+
+#include <libxml2/libxml/encoding.h>
+#include <libxml2/libxml/xmlwriter.h>
+
+#include "xml_functions.h"
+#include "lou.h"
 
 void writeCurrentPatchToFile(const char *file) {
     int rc, chord_index, note_index;

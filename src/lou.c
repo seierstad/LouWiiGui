@@ -23,6 +23,7 @@
 #include <signal.h>
 #include <unistd.h>
 #include <time.h>
+#include <stddef.h>
 
 #include <jack/jack.h>
 #include <jack/midiport.h>
@@ -67,9 +68,31 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
 	int i, j;
 	int valid_source;
 	uint8_t drums_buttons_change;
+	uint16_t buttons_change;
+	uint16_t buttons;
 
 	for (i=0; i < mesg_count; i++) {
 		switch (mesg[i].type) {
+			case CWIID_MESG_BTN:
+				printf("button\n");
+				buttons = ((uint16_t)mesg[i].btn_mesg.buttons);
+				buttons_change = buttons ^ buttons_previous;
+				buttons_previous = buttons;
+				if ((buttons & CWIID_BTN_MINUS & buttons_change) == CWIID_BTN_MINUS) {
+					transpose += 1;
+				}
+				if ((buttons & CWIID_BTN_PLUS & buttons_change) == CWIID_BTN_PLUS) {
+					transpose -= 1;
+				}
+				if ((buttons & CWIID_BTN_HOME & buttons_change) == CWIID_BTN_HOME) {
+					transpose = 0;
+				}
+
+				printf("buttons: %d\ntranspose: %d\n", buttons, transpose);
+				break;
+			case CWIID_MESG_ACC:
+				printf("acc: x %d\ty %d\tz %d", mesg[i].acc_mesg.acc[0], mesg[i].acc_mesg.acc[1], mesg[i].acc_mesg.acc[2]);
+				break;
 			case CWIID_MESG_DRUMS:
 				drums_buttons_change = ((uint8_t)mesg[i].drums_mesg.buttons) ^ drums_buttons_previous;
 				drums_buttons_previous = (uint8_t)mesg[i].drums_mesg.buttons;
@@ -313,11 +336,17 @@ void err(cwiid_wiimote_t *wiimote, const char *s, va_list ap) {
 
 void note_on(struct note_t note, void* port_buf, int i) {
 	unsigned char* buffer;
+	
+	struct note_t current_note;
+	current_note.velocity = note.velocity;
+	current_note.note_number = note.note_number + transpose;
+	//current_note.midi_channel = midi_channel;
+	
 	buffer = jack_midi_event_reserve(port_buf, i, 3);
 	buffer[2] = note.velocity;		/* velocity */
-	buffer[1] = note.note_number;	/* note number */
+	buffer[1] = note.note_number + transpose;	/* note number */
 	buffer[0] = MIDI_NOTE_ON + midi_channel;	/* note on */
-	active_notes.note[active_notes.size] = note;
+	active_notes.note[active_notes.size] = current_note;
 	active_notes.size++;
 }
 
@@ -544,20 +573,330 @@ int process(jack_nframes_t nframes, void *arg) {
 	return 0;
 }
 
-void set_rpt_mode(cwiid_wiimote_t *wiimote, uint8_t rpt_mode) {
+void set_rpt_mode(cwiid_wiimote_t *wiimote, uint16_t rpt_mode) {
 	if (cwiid_set_rpt_mode(wiimote, rpt_mode)) {
 		fprintf(stderr, "Error setting report mode\n");
 	}
 }
 
-#include "xml_functions.c"
+
+
+
+
+
+
+
+/* XML FUNCTIONS: */
+
+
+void writeCurrentPatchToFile(const char *file) {
+    int rc, chord_index, note_index;
+    xmlTextWriterPtr writer;
+    xmlChar *tmp;
+    xmlDocPtr doc;
+
+    /* Create a new XmlWriter for DOM, with no compression. */
+    writer = xmlNewTextWriterDoc(&doc, 0);
+    if (writer == NULL) {
+        printf("writeCurrentPatchToFile: Error creating the xml writer\n");
+        return;
+    }
+
+    /* Start the document with the xml default for the version,
+     * encoding UTF-8 and the default for the standalone
+     * declaration. */
+    rc = xmlTextWriterStartDocument(writer, NULL, MY_ENCODING, NULL);
+    if (rc < 0) {
+        printf("writeCurrentPatchToFile: Error at xmlTextWriterStartDocument\n");
+        return;
+    }
+
+    /* Start an element named "patch". Since thist is the first
+     * element, this will be the root element of the document. */
+    rc = xmlTextWriterStartElement(writer, BAD_CAST "patch");
+    if (rc < 0) {
+        printf("writeCurrentPatchToFile: Error at xmlTextWriterStartElement\n");
+        return;
+    }
+
+		/* Add an attribute with name "velocity" and value chord[i].note.velocity to note. */
+		rc = xmlTextWriterWriteFormatAttribute(writer, BAD_CAST "midi_channel", "%d", midi_channel);
+		if (rc < 0) {
+			printf("writeCurrentPatchToFile: Error at xmlTextWriterWriteAttribute\n");
+			return;
+		}
+
+    /* Start an element named "chords". */
+    rc = xmlTextWriterStartElement(writer, BAD_CAST "chords");
+    if (rc < 0) {
+        printf("writeCurrentPatchToFile: Error at xmlTextWriterStartElement\n");
+        return;
+    }
+
+	
+	for (chord_index = 0; chord_index < ALL_COLOR_COMBINATIONS; chord_index++) {
+		if (chord[chord_index].size > 0) {
+			/* Start an element named "chord" as child of patch. */
+			rc = xmlTextWriterStartElement(writer, BAD_CAST "chord");
+			if (rc < 0) {
+				printf("writeCurrentPatchToFile: Error at xmlTextWriterStartElement\n");
+				return;
+			}
+
+			if (chord_index & GREEN) {
+
+				rc = xmlTextWriterWriteAttribute(writer, BAD_CAST "green", BAD_CAST "true");
+				if (rc < 0) {
+					printf("writeCurrentPatchToFile: Error at xmlTextWriterWriteAttribute\n");
+					return;
+				}
+			}
+			if (chord_index & RED) {
+				rc = xmlTextWriterWriteAttribute(writer, BAD_CAST "red", BAD_CAST "true");
+				if (rc < 0) {
+					printf("writeCurrentPatchToFile: Error at xmlTextWriterWriteAttribute\n");
+					return;
+				}
+			}
+			if (chord_index & YELLOW) {
+				rc = xmlTextWriterWriteAttribute(writer, BAD_CAST "yellow", BAD_CAST "true");
+				if (rc < 0) {
+					printf("writeCurrentPatchToFile: Error at xmlTextWriterWriteAttribute\n");
+					return;
+				}
+			}
+			if (chord_index & BLUE) {
+				rc = xmlTextWriterWriteAttribute(writer, BAD_CAST "blue", BAD_CAST "true");
+				if (rc < 0) {
+					printf("writeCurrentPatchToFile: Error at xmlTextWriterWriteAttribute\n");
+					return;
+				}
+			}
+			if (chord_index & ORANGE) {
+				rc = xmlTextWriterWriteAttribute(writer, BAD_CAST "orange", BAD_CAST "true");
+				if (rc < 0) {
+					printf("writeCurrentPatchToFile: Error at xmlTextWriterWriteAttribute\n");
+					return;
+				}
+			}
+
+			rc = xmlTextWriterWriteFormatAttribute(writer, BAD_CAST "number_of_notes", "%d", chord[chord_index].size);
+			if (rc < 0) {
+				printf("writeCurrentPatchToFile: Error at xmlTextWriterWriteAttribute\n");
+				return;
+			}
+
+			for (note_index = 0; note_index < chord[chord_index].size; note_index++) {
+				/* Start an element named "note" as child of chord. */
+				rc = xmlTextWriterStartElement(writer, BAD_CAST "note");
+				if (rc < 0) {
+					printf("writeCurrentPatchToFile: Error at xmlTextWriterStartElement\n");
+					return;
+				}
+
+				/* Add an attribute with name "note_number" and value chord[i].note.note_number to note. */
+				rc = xmlTextWriterWriteFormatAttribute(writer, BAD_CAST "note_number", "%d", chord[chord_index].note[note_index].note_number);
+				if (rc < 0) {
+					printf("writeCurrentPatchToFile: Error at xmlTextWriterWriteAttribute\n");
+					return;
+				}
+
+				/* Add an attribute with name "velocity" and value chord[i].note.velocity to note. */
+				rc = xmlTextWriterWriteFormatAttribute(writer, BAD_CAST "velocity", "%d", chord[chord_index].note[note_index].velocity);
+				if (rc < 0) {
+					printf("writeCurrentPatchToFile: Error at xmlTextWriterWriteAttribute\n");
+					return;
+				}
+				if (chord[chord_index].note[note_index].delay != 0) {
+					/* Add an attribute with name "delay" and value chord[i].note.delay to note. */
+					rc = xmlTextWriterWriteFormatAttribute(writer, BAD_CAST "delay", "%d", chord[chord_index].note[note_index].delay);
+					if (rc < 0) {
+						printf("writeCurrentPatchToFile: Error at xmlTextWriterWriteAttribute\n");
+						return;
+					}
+				}
+
+				/* Close the element named note. */
+				rc = xmlTextWriterEndElement(writer);
+				if (rc < 0) {
+					printf("writeCurrentPatchToFile: Error at xmlTextWriterEndElement\n");
+					return;
+				}
+			}
+			/* Close the element named chord. */
+			rc = xmlTextWriterEndElement(writer);
+			if (rc < 0) {
+				printf("writeCurrentPatchToFile: Error at xmlTextWriterEndElement\n");
+				return;
+			}
+
+		}
+	}
+
+    /* Here we could close the elements ORDER and EXAMPLE using the
+     * function xmlTextWriterEndElement, but since we do not want to
+     * write any other elements, we simply call xmlTextWriterEndDocument,
+     * which will do all the work. */
+    rc = xmlTextWriterEndDocument(writer);
+    if (rc < 0) {
+        printf("writeCurrentPatchToFile: Error at xmlTextWriterEndDocument\n");
+        return;
+    }
+
+    xmlFreeTextWriter(writer);
+
+    xmlSaveFileEnc(file, doc, MY_ENCODING);
+
+    xmlFreeDoc(doc);
+}
+
+void freePatchMemory() {
+	int chord_index;
+	for (chord_index = 0; chord_index < ALL_COLOR_COMBINATIONS; chord_index++) {
+		free(chord[chord_index].note);
+	}
+}
+
+void readPatchFromFile (const char *file) {
+
+    xmlDoc *doc = NULL;
+    xmlNode *root_element, *chord_element, *note_element, *cur = NULL;
+		int chord_index, note_index, number_of_notes, note_number, velocity, delay = 0;
+
+    /*
+     * this initialize the library and check potential ABI mismatches
+     * between the version it was compiled for and the actual shared
+     * library used.
+     */
+    LIBXML_TEST_VERSION
+
+    /*parse the file and get the DOM */
+    doc = xmlReadFile(file, NULL, 0);
+
+    if (doc == NULL) {
+        printf("error: could not parse file %s\n", file);
+    }
+
+    /*Get the root element node */
+    root_element = xmlDocGetRootElement(doc);
+		cur = root_element;
+
+		if (!strcmp(cur->name, "patch")) {
+      		printf ("patch name: %s\n", xmlGetProp(cur, "name"));
+			if (xmlGetProp(cur, "midi_channel")) {
+				sscanf(xmlGetProp(cur, "midi_channel"), "%d", &midi_channel);
+			}
+			printf("midi channel: %d\n", midi_channel);
+      		cur = cur->children;
+
+			while (cur->type != XML_ELEMENT_NODE) { 
+				cur = cur->next;
+			}
+
+			if (!strcmp(cur->name, "chords")) {
+		    	printf ("%s\n", cur->name);
+				chord_element = cur->children;
+
+				while (chord_element != NULL) {
+					if (chord_element->type == XML_ELEMENT_NODE) {
+						chord_index = 0;
+						number_of_notes = 0;
+
+						if (xmlGetProp(chord_element, "green")) {
+							chord_index = chord_index | GREEN;
+							printf("GREEN\t");
+						}
+						if (xmlGetProp(chord_element, "red")) {
+							chord_index = chord_index | RED;
+							printf("RED\t");
+						}
+						if (xmlGetProp(chord_element, "yellow")) {
+							chord_index = chord_index | YELLOW;
+							printf("YELLOW\t");
+						}
+						if (xmlGetProp(chord_element, "blue")) {
+							chord_index = chord_index | BLUE;
+							printf("BLUE\t");
+						}
+						if (xmlGetProp(chord_element, "orange")) {
+							chord_index = chord_index | ORANGE;
+							printf("ORANGE");
+						}
+						if (xmlGetProp(chord_element, "number_of_notes")) {
+							sscanf(xmlGetProp(chord_element, "number_of_notes"), "%d", &number_of_notes);
+						}
+						printf("\n");
+
+						chord[chord_index].size = number_of_notes;
+						chord[chord_index].note = malloc(chord[chord_index].size * sizeof(chord->note));
+
+						note_element = chord_element->children;
+						note_index = 0;
+						while (note_element != NULL && note_index < number_of_notes) {
+							if (note_element->type == XML_ELEMENT_NODE) {
+								note_number = 0;
+								velocity = 0;
+								delay = 0;
+	
+
+								if (xmlGetProp(note_element, "note_number")) {
+									sscanf(xmlGetProp(note_element, "note_number"), "%d", &note_number);
+									printf("note: %d\t", note_number);
+								}
+								chord[chord_index].note[note_index].note_number = note_number;
+
+								if (xmlGetProp(note_element, "velocity")) {
+									sscanf(xmlGetProp(note_element, "velocity"), "%d", &velocity);
+									printf("velocity: %d\t", velocity);
+								}
+								chord[chord_index].note[note_index].velocity = velocity;
+						
+								if (xmlGetProp(note_element, "delay")) {
+									sscanf(xmlGetProp(note_element, "delay"), "%d", &delay);
+								}
+								chord[chord_index].note[note_index].delay = delay;
+
+								printf("delay: %d\n", delay);
+								note_index++;
+							}
+							note_element = note_element->next;
+						}
+					}
+					chord_element = chord_element->next;
+				}
+			}
+    }
+
+    /*free the document */
+    xmlFreeDoc(doc);
+
+    /*
+     *Free the global variables that may
+     *have been allocated by the parser.
+     */
+    xmlCleanupParser();
+}
+
+
+
+
+/* END XML FUNCTIONS */
+
+
+
+
+
+
+
+
 
 struct sigevent sigev;
 
 
 void init() {
 	midi_channel = 0;
-	midi_program = 3; 
+	midi_program = 3;
+	transpose = 0;
 	last_sent_volume_value = 127;
 
 	margin.it_value.tv_sec = 0;
@@ -653,12 +992,12 @@ int main(int argc, char *argv[]) {
 
 
 	/* Connect to address given on command-line, if present */
-	if (argc > 2) {
-		str2ba(argv[2], &bdaddr);
-	}
-	else {
+	//if (argc > 2) {
+	//	str2ba(argv[2], &bdaddr);
+	//}
+	//else {
 		bdaddr = *BDADDR_ANY;
-	}
+	//}
 
 	/* Connect to the wiimote */
 	printf("Put Wiimote in discoverable mode now (press 1+2)...\n");
@@ -669,7 +1008,7 @@ int main(int argc, char *argv[]) {
 	if (cwiid_set_mesg_callback(wiimote, cwiid_callback)) {
 		fprintf(stderr, "Unable to set message callback\n");
 	}
-	set_rpt_mode(wiimote, CWIID_RPT_EXT);
+	set_rpt_mode(wiimote, CWIID_RPT_EXT | CWIID_RPT_BTN | CWIID_RPT_ACC);
 	cwiid_enable(wiimote, CWIID_FLAG_MESG_IFC);
 
 

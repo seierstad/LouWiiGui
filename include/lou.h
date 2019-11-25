@@ -15,7 +15,6 @@
 #define MIDI_EFFECT_CTL_1_LSB 0x2C
 
 
-
 #define MAX_ACTIVE_NOTES_COUNT  120
 #define MAX_QUEUED_NOTES_COUNT  120
 #define MAX_DELAYED_NOTES_COUNT 120
@@ -29,6 +28,7 @@
 #define ORANGE 0x10
 #define ALL_COLOR_COMBINATIONS (GREEN | RED | YELLOW | BLUE | ORANGE) + 1
 #define PEDAL  0x20
+
 
 #define WHAMMY_STATE_UNKNOWN 0xFF
 #define TOUCHBAR_UNTOUCHED 0x0F
@@ -182,6 +182,7 @@ unsigned int chord_state = 0;
 unsigned int drums_action = 0;
 unsigned int drums_state = 0;
 uint8_t drums_buttons_previous = 0;
+uint16_t buttons_previous = 0;
 
 struct turntables_state current_turntables_state;
 
@@ -208,6 +209,7 @@ cwiid_mesg_callback_t cwiid_callback;
 
 int midi_channel;
 int midi_program;
+int8_t transpose;
 
 // initial attempt to implement delay:
 #define DELAYED_NOTE_TRIGGERED 13
