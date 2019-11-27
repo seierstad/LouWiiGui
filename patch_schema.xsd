@@ -1,10 +1,13 @@
 <?xml version="1.0"?>
 <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema">
 	<xsd:complexType name="noteType">
-		<xsd:attribute name="note_number" type="xsd:positiveInteger" use="required" />
-		<xsd:attribute name="velocity"    type="xsd:positiveInteger" use="required" />
-		<xsd:attribute name="delay"       type="xsd:nonNegativeInteger" use="optional" default="0" />
+		<xsd:attribute name="note_number"  type="xsd:positiveInteger"    use="required" />
+		<xsd:attribute name="velocity"     type="xsd:positiveInteger"    use="required" />
+		<xsd:attribute name="delay"        type="xsd:nonNegativeInteger" use="optional" default="0" />
+		<xsd:attribute name="midi_channel" type="xsd:nonNegativeInteger" use="optional" default="0" />
+		<xsd:attribute name="sustained"    type="xsd:boolean"            use="optional" default="false" />
 	</xsd:complexType>
+
 	<xsd:complexType name="chordType">
 		<xsd:sequence>
 			<xsd:element name="note" type="noteType" maxOccurs="unbounded" />
@@ -26,12 +29,33 @@
 		</xsd:attribute>
 	</xsd:complexType>
 
-	<xsd:complexType name="PatchType">
+	<xsd:complexType name="sequenceType">
+		<xsd:attribute name="green"  type="xsd:boolean" use="optional" default="false" />
+		<xsd:attribute name="red"    type="xsd:boolean" use="optional" default="false" />
+		<xsd:attribute name="yellow" type="xsd:boolean" use="optional" default="false" />
+		<xsd:attribute name="blue"   type="xsd:boolean" use="optional" default="false" />
+		<xsd:attribute name="orange" type="xsd:boolean" use="optional" default="false" />
+		<xsd:attribute name="number_of_steps" type="xsd:positiveInteger" use="required" />
+		<xsd:sequence>
+			<xsd:element name="step" type="chordType" maxOccurs="unbounded" />
+		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:complexType name="BankType">
 		<xsd:sequence>
 			<xsd:element name="chords">
 				<xsd:complexType>
 					<xsd:sequence>
-							<xsd:element name="chord" type="chordType" maxOccurs="unbounded" />
+						<xsd:element name="chord" type="chordType" maxOccurs="unbounded" />
+					</xsd:sequence>
+				</xsd:complexType>
+			</xsd:element>
+		</xsd:sequence>
+		<xsd:sequence>
+			<xsd:element name="sequences">
+				<xsd:complexType>
+					<xsd:sequence>
+						<xsd:element name="sequence" type="sequenceType" maxOccurs="unbounded" />
 					</xsd:sequence>
 				</xsd:complexType>
 			</xsd:element>
@@ -40,5 +64,13 @@
 		<xsd:attribute name="midi_channel" type="xsd:nonNegativeInteger" use="optional" />
 	</xsd:complexType>
 
+	<xsd:complexType name="PatchType">
+		<xsd:attribute name="name" type="xsd:string" use="optional" />
+		<xsd:element name="banks">
+			<xsd:sequence>
+				<xsd:element name="bank" type="BankType" minOccurs="1" maxOccurs="3" />
+			</xsd:sequence>
+		</xsd:element>
+	</xsd:complexType>
 	<xsd:element name="patch" type="PatchType" /> 	
 </xsd:schema>

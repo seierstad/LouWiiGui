@@ -36,6 +36,10 @@
 
 #include "lou.h"
 
+#define LOUWIIGUI_CWIID_RPT_MODE (CWIID_RPT_EXT | CWIID_RPT_BTN) // | CWIID_RPT_ACC)
+
+#define USE_MIDI_CHANNEL bank[selected_bank].midi_channel ? bank[selected_bank].midi_channel : midi_channel
+
 void neio(int sig, siginfo_t *si, void *uc) {
 	struct delayed_note_t * dn;
 	dn = (struct delayed_note_t *) si->si_value.sival_ptr;
@@ -87,6 +91,19 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
 				if ((buttons & CWIID_BTN_HOME & buttons_change) == CWIID_BTN_HOME) {
 					transpose = 0;
 				}
+				if ((buttons & CWIID_BTN_1) && (buttons & CWIID_BTN_2) && bank[2].selectable && selected_bank != 2) {
+					selected_bank = 2;
+					printf("selected bank: %d\n", selected_bank);
+				}
+				if ((buttons & CWIID_BTN_1) && !(buttons & CWIID_BTN_2) && !(buttons_change & CWIID_BTN_2) && bank[0].selectable && selected_bank != 0) {
+					selected_bank = 0;
+					printf("selected bank: %d\n", selected_bank);
+				}
+				if ((buttons & CWIID_BTN_2) && !(buttons & CWIID_BTN_1) && !(buttons_change & CWIID_BTN_1) && bank[1].selectable && selected_bank != 1) {
+					selected_bank = 1;
+					printf("selected bank: %d\n", selected_bank);
+				}
+
 
 				printf("buttons: %d\ntranspose: %d\n", buttons, transpose);
 				break;
@@ -336,16 +353,18 @@ void err(cwiid_wiimote_t *wiimote, const char *s, va_list ap) {
 
 void note_on(struct note_t note, void* port_buf, int i) {
 	unsigned char* buffer;
-	
+	int use_midi_channel = note.midi_channel ? note.midi_channel : USE_MIDI_CHANNEL;
+
 	struct note_t current_note;
 	current_note.velocity = note.velocity;
 	current_note.note_number = note.note_number + transpose;
-	//current_note.midi_channel = midi_channel;
+	current_note.midi_channel = use_midi_channel;
 	
+	printf("use: %d, bank: %d, note: %d, patch: %d\n", use_midi_channel, bank[selected_bank].midi_channel, note.midi_channel, midi_channel);
 	buffer = jack_midi_event_reserve(port_buf, i, 3);
 	buffer[2] = note.velocity;		/* velocity */
 	buffer[1] = note.note_number + transpose;	/* note number */
-	buffer[0] = MIDI_NOTE_ON + midi_channel;	/* note on */
+	buffer[0] = MIDI_NOTE_ON + use_midi_channel - 1;	/* note on */
 	active_notes.note[active_notes.size] = current_note;
 	active_notes.size++;
 }
@@ -383,6 +402,8 @@ void strum_chord(struct chord_t chord, void* port_buf, int i) {
 
 void mute(void *port_buf, int i) {
 	unsigned char* buffer;
+	int use_midi_channel = USE_MIDI_CHANNEL;
+	int note_midi_channel;
 
 	int j;
 	for(j=0; j < MAX_DELAYED_NOTES_COUNT; j++){
@@ -393,10 +414,11 @@ void mute(void *port_buf, int i) {
 	}
 	queued_notes.size = 0;
 	while(active_notes.size > 0) {
+		note_midi_channel = active_notes.note[active_notes.size - 1].midi_channel;
 		buffer = jack_midi_event_reserve(port_buf, i, 3);
 		buffer[2] = active_notes.note[active_notes.size - 1].velocity;		/* velocity */
 		buffer[1] = active_notes.note[active_notes.size - 1].note_number;	/* note number */
-		buffer[0] = MIDI_NOTE_OFF + midi_channel;	/* note off */
+		buffer[0] = MIDI_NOTE_OFF + (note_midi_channel ? note_midi_channel : use_midi_channel) - 1;	/* note off, standard midi channel */
 		active_notes.size--;
 	}
 }
@@ -406,6 +428,7 @@ int process(jack_nframes_t nframes, void *arg) {
 	void* port_buf = jack_port_get_buffer(output_port, nframes);
 	unsigned char* buffer;
 	jack_midi_clear_buffer(port_buf);
+	int use_midi_channel = USE_MIDI_CHANNEL;
 
 	for(i = 0; i < nframes; i++) {
 		while(queued_notes.size > 0) {
@@ -414,7 +437,7 @@ int process(jack_nframes_t nframes, void *arg) {
 		}
 		if (strummer_action != STRUMMER_ACTION_NONE) {
 			if (strummer_action == STRUMMER_ACTION_MID_DOWN || strummer_action == STRUMMER_ACTION_MID_UP) {
-				strum_chord(chord[chord_state], port_buf, i);
+				strum_chord(bank[selected_bank].chord[chord_state], port_buf, i);
 				strummer_action = STRUMMER_ACTION_NONE;
 			}
 			else {
@@ -430,7 +453,7 @@ int process(jack_nframes_t nframes, void *arg) {
 			unsigned int pitch_value = MIDI_PITCH_CENTER - pitch_shift;
 			buffer[2] = (pitch_value & 0x3F80) >> 7;  // most significant bits
 			buffer[1] = pitch_value & 0x007f;         // least significant bits
-			buffer[0] = MIDI_PITCH_WHEEL + midi_channel;	// pitch wheel change 
+			buffer[0] = MIDI_PITCH_WHEEL + use_midi_channel - 1;	// pitch wheel change 
 			printf("whammy! %x, %x, %x, desimalt: %d\n", buffer[0], buffer[2], buffer[1], pitch_value);
 			whammy_action = WHAMMY_ACTION_NONE;
 		}
@@ -442,7 +465,7 @@ int process(jack_nframes_t nframes, void *arg) {
 			printf("touchbar action! %d, %x, sent %x\n", touchbar_action, touchbar_state, modulation);
 			buffer[2] = modulation;
 			buffer[1] = 0x1;        // modulation
-			buffer[0] = MIDI_CONTROL_CHANGE + midi_channel;	// control change 
+			buffer[0] = MIDI_CONTROL_CHANGE + use_midi_channel - 1;	// control change 
 			touchbar_action = TOUCHBAR_ACTION_NONE;
 		}
 		if (stick_action != STICK_ACTION_NONE) {
@@ -466,7 +489,7 @@ int process(jack_nframes_t nframes, void *arg) {
 				buffer = jack_midi_event_reserve(port_buf, i, 3);
 				buffer[2] = volume;
 				buffer[1] = 0x7;        // volume
-				buffer[0] = MIDI_CONTROL_CHANGE + midi_channel;	// control change
+				buffer[0] = MIDI_CONTROL_CHANGE + use_midi_channel - 1;	// control change
 				last_sent_volume_value = volume;
 			}
 			stick_action = STICK_ACTION_NONE;
@@ -537,12 +560,12 @@ int process(jack_nframes_t nframes, void *arg) {
 			uint8_t crossfader_midi_value = current_turntables_state.crossfader * 127 / CWIID_TURNTABLES_CROSSFADER_MAX;
 			buffer[2] = crossfader_midi_value;
 			buffer[1] = MIDI_BALANCE_MSB;
-			buffer[0] = MIDI_CONTROL_CHANGE + midi_channel;	// control change
+			buffer[0] = MIDI_CONTROL_CHANGE + use_midi_channel - 1;	// control change
 			crossfader_action = CROSSFADER_ACTION_NONE;
 		}
 		if (effect_dial_action != EFFECT_DIAL_ACTION_NONE) {
 			buffer = jack_midi_event_reserve(port_buf, i, 3);
-			buffer[0] = MIDI_CONTROL_CHANGE + midi_channel;	// control change
+			buffer[0] = MIDI_CONTROL_CHANGE + use_midi_channel - 1;	// control change
 			buffer[1] = MIDI_EFFECT_CTL_1_MSB;
 			int16_t signed_value;
 			
@@ -715,6 +738,14 @@ void writeCurrentPatchToFile(const char *file) {
 						return;
 					}
 				}
+				if (chord[chord_index].note[note_index].midi_channel != 0) {
+					/* Add an attribute with name "midi_channel" and value chord[i].note.midi_channel to note. */
+					rc = xmlTextWriterWriteFormatAttribute(writer, BAD_CAST "midi_channel", "%d", chord[chord_index].note[note_index].midi_channel);
+					if (rc < 0) {
+						printf("writeCurrentPatchToFile: Error at xmlTextWriterWriteAttribute note.midi_channel\n");
+						return;
+					}
+				}
 
 				/* Close the element named note. */
 				rc = xmlTextWriterEndElement(writer);
@@ -760,8 +791,8 @@ void freePatchMemory() {
 void readPatchFromFile (const char *file) {
 
     xmlDoc *doc = NULL;
-    xmlNode *root_element, *chord_element, *note_element, *cur = NULL;
-		int chord_index, note_index, number_of_notes, note_number, velocity, delay = 0;
+    xmlNode *root_element, *bank_element, *bank_content, *chord_element, *note_element, *cur = NULL;
+		int bank_index, chord_index, note_index, number_of_notes, note_number, velocity, delay = 0, bank_midi_channel, note_midi_channel;
 
     /*
      * this initialize the library and check potential ABI mismatches
@@ -779,92 +810,131 @@ void readPatchFromFile (const char *file) {
 
     /*Get the root element node */
     root_element = xmlDocGetRootElement(doc);
-		cur = root_element;
+	cur = root_element;
 
-		if (!strcmp(cur->name, "patch")) {
-      		printf ("patch name: %s\n", xmlGetProp(cur, "name"));
-			if (xmlGetProp(cur, "midi_channel")) {
-				sscanf(xmlGetProp(cur, "midi_channel"), "%d", &midi_channel);
-			}
-			printf("midi channel: %d\n", midi_channel);
-      		cur = cur->children;
+	if (!strcmp(cur->name, "patch")) {
+  		printf ("patch name: %s\n", xmlGetProp(cur, "name"));
+		if (xmlGetProp(cur, "midi_channel")) {
+			sscanf(xmlGetProp(cur, "midi_channel"), "%d", &midi_channel);
+		}
+		printf("midi channel: %d\n", midi_channel);
+  		cur = cur->children;
 
-			while (cur->type != XML_ELEMENT_NODE) { 
-				cur = cur->next;
-			}
+		while (cur->type != XML_ELEMENT_NODE) { 
+			cur = cur->next;
+		}
+		if (!strcmp(cur->name, "banks")) {
+			printf("%s\n", cur->name);
+			bank_element = cur->children;
+			bank_index = 0;
 
-			if (!strcmp(cur->name, "chords")) {
-		    	printf ("%s\n", cur->name);
-				chord_element = cur->children;
-
-				while (chord_element != NULL) {
-					if (chord_element->type == XML_ELEMENT_NODE) {
-						chord_index = 0;
-						number_of_notes = 0;
-
-						if (xmlGetProp(chord_element, "green")) {
-							chord_index = chord_index | GREEN;
-							printf("GREEN\t");
-						}
-						if (xmlGetProp(chord_element, "red")) {
-							chord_index = chord_index | RED;
-							printf("RED\t");
-						}
-						if (xmlGetProp(chord_element, "yellow")) {
-							chord_index = chord_index | YELLOW;
-							printf("YELLOW\t");
-						}
-						if (xmlGetProp(chord_element, "blue")) {
-							chord_index = chord_index | BLUE;
-							printf("BLUE\t");
-						}
-						if (xmlGetProp(chord_element, "orange")) {
-							chord_index = chord_index | ORANGE;
-							printf("ORANGE");
-						}
-						if (xmlGetProp(chord_element, "number_of_notes")) {
-							sscanf(xmlGetProp(chord_element, "number_of_notes"), "%d", &number_of_notes);
-						}
-						printf("\n");
-
-						chord[chord_index].size = number_of_notes;
-						chord[chord_index].note = malloc(chord[chord_index].size * sizeof(chord->note));
-
-						note_element = chord_element->children;
-						note_index = 0;
-						while (note_element != NULL && note_index < number_of_notes) {
-							if (note_element->type == XML_ELEMENT_NODE) {
-								note_number = 0;
-								velocity = 0;
-								delay = 0;
-	
-
-								if (xmlGetProp(note_element, "note_number")) {
-									sscanf(xmlGetProp(note_element, "note_number"), "%d", &note_number);
-									printf("note: %d\t", note_number);
-								}
-								chord[chord_index].note[note_index].note_number = note_number;
-
-								if (xmlGetProp(note_element, "velocity")) {
-									sscanf(xmlGetProp(note_element, "velocity"), "%d", &velocity);
-									printf("velocity: %d\t", velocity);
-								}
-								chord[chord_index].note[note_index].velocity = velocity;
-						
-								if (xmlGetProp(note_element, "delay")) {
-									sscanf(xmlGetProp(note_element, "delay"), "%d", &delay);
-								}
-								chord[chord_index].note[note_index].delay = delay;
-
-								printf("delay: %d\n", delay);
-								note_index++;
-							}
-							note_element = note_element->next;
-						}
+			while (bank_element != NULL) {
+				if (bank_element->type == XML_ELEMENT_NODE) {
+					printf("bank %d %s\n", bank_index, xmlGetProp(bank_element, "name"));
+					if (xmlGetProp(bank_element, "midi_channel")) {
+						sscanf(xmlGetProp(bank_element, "midi_channel"), "%d", &(bank[bank_index].midi_channel));
 					}
-					chord_element = chord_element->next;
+					bank_content = bank_element->children;
+
+					while (bank_content != NULL) {
+						if (bank_content->type == XML_ELEMENT_NODE) {
+							printf("%s\n", bank_content->name);
+
+							if (!strcmp(bank_content->name, "chords")) {
+								chord_element = bank_content->children;
+
+								while (chord_element != NULL) {
+									if (chord_element->type == XML_ELEMENT_NODE) {
+										chord_index = 0;
+										number_of_notes = 0;
+
+										if (xmlGetProp(chord_element, "green")) {
+											chord_index = chord_index | GREEN;
+											printf("GREEN\t");
+										}
+										if (xmlGetProp(chord_element, "red")) {
+											chord_index = chord_index | RED;
+											printf("RED\t");
+										}
+										if (xmlGetProp(chord_element, "yellow")) {
+											chord_index = chord_index | YELLOW;
+											printf("YELLOW\t");
+										}
+										if (xmlGetProp(chord_element, "blue")) {
+											chord_index = chord_index | BLUE;
+											printf("BLUE\t");
+										}
+										if (xmlGetProp(chord_element, "orange")) {
+											chord_index = chord_index | ORANGE;
+											printf("ORANGE");
+										}
+										if (xmlGetProp(chord_element, "number_of_notes")) {
+											sscanf(xmlGetProp(chord_element, "number_of_notes"), "%d", &number_of_notes);
+										}
+										printf("\n");
+
+										bank[bank_index].chord[chord_index].size = number_of_notes;
+										bank[bank_index].chord[chord_index].note = malloc(bank[bank_index].chord[chord_index].size * sizeof(struct note_t));
+
+										note_element = chord_element->children;
+										note_index = 0;
+										while (note_element != NULL && note_index < number_of_notes) {
+											if (note_element->type == XML_ELEMENT_NODE) {
+												note_number = 0;
+												velocity = 0;
+												delay = 0;
+												note_midi_channel = 0;
+					
+
+												if (xmlGetProp(note_element, "note_number")) {
+													sscanf(xmlGetProp(note_element, "note_number"), "%d", &note_number);
+													printf("note: %d\t", note_number);
+												}
+												bank[bank_index].chord[chord_index].note[note_index].note_number = note_number;
+
+												if (xmlGetProp(note_element, "velocity")) {
+													sscanf(xmlGetProp(note_element, "velocity"), "%d", &velocity);
+													printf("velocity: %d\t", velocity);
+												}
+												bank[bank_index].chord[chord_index].note[note_index].velocity = velocity;
+										
+												if (xmlGetProp(note_element, "delay")) {
+													sscanf(xmlGetProp(note_element, "delay"), "%d", &delay);
+												}
+												bank[bank_index].chord[chord_index].note[note_index].delay = delay;
+												printf("delay: %d", delay);
+
+												if (xmlGetProp(note_element, "midi_channel")) {
+													sscanf(xmlGetProp(note_element, "midi_channel"), "%d", &note_midi_channel);
+													bank[bank_index].chord[chord_index].note[note_index].midi_channel = note_midi_channel;
+													printf("\tmidi_channel: %d\n", note_midi_channel);
+												} else {
+													bank[bank_index].chord[chord_index].note[note_index].midi_channel = 0;
+													printf("\n");
+												}
+
+
+												note_index++;
+											}
+											note_element = note_element->next;
+										}
+									}
+									chord_element = chord_element->next;
+								}
+
+							}
+						}
+						bank_content = bank_content->next;
+					}
+					bank[bank_index].selectable = 1;
+					bank_index += 1;
 				}
+
+
+				bank_element = bank_element->next;
 			}
+			printf("\n");
+		}
     }
 
     /*free the document */
@@ -895,6 +965,7 @@ struct sigevent sigev;
 
 void init() {
 	midi_channel = 0;
+	bank_midi_channel = 0;
 	midi_program = 3;
 	transpose = 0;
 	last_sent_volume_value = 127;
@@ -917,9 +988,15 @@ void init() {
 	stick_zone_rotation_clockwise_counter = 0;
 	stick_zone_rotation_counter_clockwise_counter = 0;
 
-	delayed_notes = malloc(MAX_DELAYED_NOTES_COUNT * sizeof(struct delayed_note_t));
 	int i;
-	for(i=0; i < MAX_DELAYED_NOTES_COUNT; i++){
+	bank = malloc(MAX_BANKS_COUNT * sizeof(struct bank_t));
+	for(i = 0; i < MAX_BANKS_COUNT; i++) {
+		bank[i].midi_channel = 0;
+		bank[i].selectable = 0;
+	}	
+
+	delayed_notes = malloc(MAX_DELAYED_NOTES_COUNT * sizeof(struct delayed_note_t));
+	for(i = 0; i < MAX_DELAYED_NOTES_COUNT; i++){
 		delayed_notes[i].note.velocity = 0;
 	}
 
@@ -1008,7 +1085,7 @@ int main(int argc, char *argv[]) {
 	if (cwiid_set_mesg_callback(wiimote, cwiid_callback)) {
 		fprintf(stderr, "Unable to set message callback\n");
 	}
-	set_rpt_mode(wiimote, CWIID_RPT_EXT | CWIID_RPT_BTN | CWIID_RPT_ACC);
+	set_rpt_mode(wiimote, LOUWIIGUI_CWIID_RPT_MODE);
 	cwiid_enable(wiimote, CWIID_FLAG_MESG_IFC);
 
 
@@ -1047,7 +1124,7 @@ int main(int argc, char *argv[]) {
 	}
   free(ports);
 
-printf("kaci");
+	printf("kaci");
 
 
 	system("stty -echo");

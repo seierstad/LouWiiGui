@@ -167,6 +167,7 @@ struct note_t {
 	unsigned short int velocity;
 	unsigned short int note_number;
 	unsigned int delay;  // used for strumming patterns (not implemented yet)
+	unsigned int midi_channel;
 };
 
 struct chord_t {
@@ -176,6 +177,18 @@ struct chord_t {
 
 // for all combinations of fret buttons: which notes to trigger
 struct chord_t chord[ALL_COLOR_COMBINATIONS];  
+
+
+// a bank is a collection of chords and sequences
+struct bank_t {
+	char selectable;
+	int midi_channel;
+	struct chord_t chord[ALL_COLOR_COMBINATIONS];
+};
+
+#define MAX_BANKS_COUNT 3
+struct bank_t *bank;
+
 
 // current fret button + drum trigger states
 unsigned int chord_state = 0;
@@ -209,7 +222,9 @@ cwiid_mesg_callback_t cwiid_callback;
 
 int midi_channel;
 int midi_program;
+int bank_midi_channel;
 int8_t transpose;
+int8_t selected_bank;
 
 // initial attempt to implement delay:
 #define DELAYED_NOTE_TRIGGERED 13
