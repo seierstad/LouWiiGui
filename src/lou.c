@@ -405,6 +405,8 @@ void mute(void *port_buf, int i) {
 	int use_midi_channel = USE_MIDI_CHANNEL;
 	int note_midi_channel;
 
+	jack_nframes_t use_time = (i != 0) ? ((jack_nframes_t) i) : jack_get_current_transport_frame(client); 	
+
 	int j;
 	for(j=0; j < MAX_DELAYED_NOTES_COUNT; j++){
 		if (delayed_notes[j].note.velocity != 0) {
@@ -464,7 +466,7 @@ int process(jack_nframes_t nframes, void *arg) {
 			unsigned int modulation = (MIDI_MODULATION_MAX * touchbar_state) / CWIID_GUITAR_TOUCHBAR_5TH ; 
 			printf("touchbar action! %d, %x, sent %x\n", touchbar_action, touchbar_state, modulation);
 			buffer[2] = modulation;
-			buffer[1] = 0x1;        // modulation
+			buffer[1] = MIDI_CC_MODULATION_MSB;        // modulation
 			buffer[0] = MIDI_CONTROL_CHANGE + use_midi_channel - 1;	// control change 
 			touchbar_action = TOUCHBAR_ACTION_NONE;
 		}
@@ -488,7 +490,7 @@ int process(jack_nframes_t nframes, void *arg) {
 				printf("volume: %d\n", volume);
 				buffer = jack_midi_event_reserve(port_buf, i, 3);
 				buffer[2] = volume;
-				buffer[1] = 0x7;        // volume
+				buffer[1] = MIDI_CC_VOLUME_MSB;        // volume
 				buffer[0] = MIDI_CONTROL_CHANGE + use_midi_channel - 1;	// control change
 				last_sent_volume_value = volume;
 			}
@@ -781,11 +783,25 @@ void writeCurrentPatchToFile(const char *file) {
     xmlFreeDoc(doc);
 }
 
-void freePatchMemory() {
+void freePatchMemory () {
+	int bank_index;
 	int chord_index;
-	for (chord_index = 0; chord_index < ALL_COLOR_COMBINATIONS; chord_index++) {
-		free(chord[chord_index].note);
+
+	for (bank_index = 0; bank_index < MAX_BANKS_COUNT; bank_index++) {
+		for (chord_index = 0; chord_index < ALL_COLOR_COMBINATIONS; chord_index++) {
+			free(bank[bank_index].chord[chord_index].note);
+		}
 	}
+	free(bank);
+}
+
+void freeStateMemory () {
+	int delayed_notes_index;
+	int active_notes_index;
+
+	free(delayed_notes);
+	free(queued_notes.note);
+	free(active_notes.note);
 }
 
 void readPatchFromFile (const char *file) {
@@ -817,6 +833,15 @@ void readPatchFromFile (const char *file) {
 		if (xmlGetProp(cur, "midi_channel")) {
 			sscanf(xmlGetProp(cur, "midi_channel"), "%d", &midi_channel);
 		}
+		if (xmlGetProp(cur, "midi_bank_msb")) {
+			sscanf(xmlGetProp(cur, "midi_bank_msb"), "%d", &midi_bank_msb);
+		}
+		if (xmlGetProp(cur, "midi_bank_lsb")) {
+			sscanf(xmlGetProp(cur, "midi_bank_lsb"), "%d", &midi_bank_lsb);
+		}
+		if (xmlGetProp(cur, "midi_program")) {
+			sscanf(xmlGetProp(cur, "midi_program"), "%d", &midi_program);
+		}
 		printf("midi channel: %d\n", midi_channel);
   		cur = cur->children;
 
@@ -834,6 +859,16 @@ void readPatchFromFile (const char *file) {
 					if (xmlGetProp(bank_element, "midi_channel")) {
 						sscanf(xmlGetProp(bank_element, "midi_channel"), "%d", &(bank[bank_index].midi_channel));
 					}
+					if (xmlGetProp(bank_element, "midi_bank_msb")) {
+						sscanf(xmlGetProp(bank_element, "midi_bank_msb"), "%d", &(bank[bank_index].midi_bank_msb));
+					}
+					if (xmlGetProp(bank_element, "midi_bank_lsb")) {
+						sscanf(xmlGetProp(bank_element, "midi_bank_lsb"), "%d", &(bank[bank_index].midi_bank_lsb));
+					}
+					if (xmlGetProp(bank_element, "midi_program")) {
+						sscanf(xmlGetProp(bank_element, "midi_program"), "%d", &(bank[bank_index].midi_program));
+					}
+
 					bank_content = bank_element->children;
 
 					while (bank_content != NULL) {
@@ -965,8 +1000,9 @@ struct sigevent sigev;
 
 void init() {
 	midi_channel = 0;
-	bank_midi_channel = 0;
-	midi_program = 3;
+	midi_bank_msb = MIDI_DATA_NULL;
+	midi_bank_lsb = MIDI_DATA_NULL;
+	midi_program = MIDI_DATA_NULL;
 	transpose = 0;
 	last_sent_volume_value = 127;
 
@@ -992,6 +1028,9 @@ void init() {
 	bank = malloc(MAX_BANKS_COUNT * sizeof(struct bank_t));
 	for(i = 0; i < MAX_BANKS_COUNT; i++) {
 		bank[i].midi_channel = 0;
+		bank[i].midi_bank_msb = MIDI_DATA_NULL;
+		bank[i].midi_bank_lsb = MIDI_DATA_NULL;
+		bank[i].midi_program = MIDI_DATA_NULL;
 		bank[i].selectable = 0;
 	}	
 
@@ -1025,6 +1064,8 @@ void init() {
 
 void siginthandler(int param) {
     printf("User pressed Ctrl+C\n");
+    mute(output_port, 0);
+
 	if (client) {
 		jack_deactivate(client);
 		if (output_port) {
@@ -1036,6 +1077,8 @@ void siginthandler(int param) {
 		cwiid_disable(wiimote, CWIID_FLAG_MESG_IFC);
 		cwiid_close(wiimote);
 	}
+	freePatchMemory();
+	freeStateMemory();
 
     system("stty echo");
     exit(1);
@@ -1058,7 +1101,6 @@ int main(int argc, char *argv[]) {
 // end experiment
 
 
-	freePatchMemory();
 	if (argc > 1) {
 		readPatchFromFile(argv[1]);
 	} else {
@@ -1114,15 +1156,14 @@ int main(int argc, char *argv[]) {
 	}
 
 	const char **ports;
-  if ((ports = jack_get_ports (client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsInput)) == NULL) {
-    fprintf(stderr, "Cannot find any physical playback ports\n");
-  }
-	else {
+	if ((ports = jack_get_ports (client, NULL, JACK_DEFAULT_MIDI_TYPE, JackPortIsInput)) == NULL) {
+		fprintf(stderr, "Cannot find any physical playback ports\n");
+	} else {
 		if (jack_connect (client, jack_port_name(output_port), ports[0])) {
-		  fprintf (stderr, "cannot connect output ports\n");
+			fprintf (stderr, "cannot connect output ports\n");
 		}
 	}
-  free(ports);
+    free(ports);
 
 	printf("kaci");
 

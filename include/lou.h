@@ -4,16 +4,26 @@
 #define MIDI_PITCH_MAX       0x3FFF
 #define MIDI_PITCH_CENTER    0x2000
 #define MIDI_MODULATION_MAX  0x7F
+#define MIDI_DATA_NULL       0xFF   
 
-#define MIDI_NOTE_OFF         0x80
-#define MIDI_NOTE_ON          0x90
-#define MIDI_CONTROL_CHANGE   0xB0
-#define MIDI_PITCH_WHEEL      0xE0
-#define MIDI_BALANCE_MSB      0x08
-#define MIDI_BALANCE_LSB      0x28
-#define MIDI_EFFECT_CTL_1_MSB 0x0C
-#define MIDI_EFFECT_CTL_1_LSB 0x2C
-
+#define MIDI_NOTE_OFF           0x80
+#define MIDI_NOTE_ON            0x90
+#define MIDI_PITCH_WHEEL        0xE0
+#define MIDI_CONTROL_CHANGE     0xB0
+#define MIDI_CC_BANK_SELECT_MSB 0x00
+#define MIDI_CC_BANK_SELECT_LSB 0x20
+#define MIDI_CC_MODULATION_MSB  0x01
+#define MIDI_CC_MODULATION_LSB  0x21
+#define MIDI_CC_BREATH_CTL_MSB  0x02
+#define MIDI_CC_BREATH_CTL_LSB  0x22
+#define MIDI_CC_FOOT_CTL_MSB    0x04
+#define MIDI_CC_FOOT_CTL_LSB    0x24
+#define MIDI_CC_VOLUME_MSB      0x07
+#define MIDI_CC_VOLUME_LSB      0x27
+#define MIDI_BALANCE_MSB        0x08
+#define MIDI_BALANCE_LSB        0x28
+#define MIDI_EFFECT_CTL_1_MSB   0x0C
+#define MIDI_EFFECT_CTL_1_LSB   0x2C
 
 #define MAX_ACTIVE_NOTES_COUNT  120
 #define MAX_QUEUED_NOTES_COUNT  120
@@ -183,6 +193,9 @@ struct chord_t chord[ALL_COLOR_COMBINATIONS];
 struct bank_t {
 	char selectable;
 	int midi_channel;
+	int midi_bank_msb;
+	int midi_bank_lsb;
+	int midi_program;
 	struct chord_t chord[ALL_COLOR_COMBINATIONS];
 };
 
@@ -221,6 +234,8 @@ cwiid_wiimote_t *wiimote;	/* wiimote handle */
 cwiid_mesg_callback_t cwiid_callback;
 
 int midi_channel;
+int midi_bank_msb;
+int midi_bank_lsb;
 int midi_program;
 int bank_midi_channel;
 int8_t transpose;
