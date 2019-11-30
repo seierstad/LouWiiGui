@@ -67,6 +67,48 @@ void usage() {
   (byte & 0x02 ? 1 : 0), \
   (byte & 0x01 ? 1 : 0)
 */
+
+void sendBankProgramChange(int bank_msb, int bank_lsb, int program, void *port_buf, jack_nframes_t time) {
+	unsigned char* buffer;
+	int use_midi_channel = USE_MIDI_CHANNEL;
+
+	if (bank_msb != MIDI_DATA_NULL) {
+		buffer = jack_midi_event_reserve(port_buf, time, 3);
+		buffer[2] = bank_msb;
+		buffer[1] = MIDI_CC_BANK_SELECT_MSB;
+		buffer[0] = MIDI_CONTROL_CHANGE + use_midi_channel - 1;
+	}
+	if (bank_lsb != MIDI_DATA_NULL) {
+		buffer = jack_midi_event_reserve(port_buf, time, 3);
+		buffer[2] = bank_lsb;
+		buffer[1] = MIDI_CC_BANK_SELECT_LSB;
+		buffer[0] = MIDI_CONTROL_CHANGE + use_midi_channel - 1;
+	}
+	if (program != MIDI_DATA_NULL) {
+		buffer = jack_midi_event_reserve(port_buf, time, 2);
+		buffer[1] = program;
+		buffer[0] = MIDI_PROGRAM_CHANGE + use_midi_channel - 1;
+	}
+
+}
+
+void selectBank (unsigned char bank_number, void *port_buf, jack_nframes_t time) {
+	if (bank[bank_number].selectable && selected_bank != bank_number) {
+		selected_bank = bank_number;
+		printf("prog: %d\tmvb: %d\tlvb: %d\n\n", bank[selected_bank].midi_program, bank[selected_bank].midi_bank_msb, bank[selected_bank].midi_bank_lsb);
+
+		if (
+			bank[selected_bank].midi_program != MIDI_DATA_NULL || 
+			bank[selected_bank].midi_bank_msb != MIDI_DATA_NULL || 
+			bank[selected_bank].midi_bank_lsb != MIDI_DATA_NULL) {
+			sendBankProgramChange(bank[selected_bank].midi_bank_msb, bank[selected_bank].midi_bank_lsb, bank[selected_bank].midi_program, port_buf, time); 
+		} else {
+			sendBankProgramChange(midi_bank_msb, midi_bank_lsb, midi_program, port_buf, time); 
+		}
+		printf("selected bank: %d\n", selected_bank);
+	}
+}
+
 void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
                     union cwiid_mesg mesg[], struct timespec *timestamp){
 	int i, j;
@@ -92,16 +134,16 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
 					transpose = 0;
 				}
 				if ((buttons & CWIID_BTN_1) && (buttons & CWIID_BTN_2) && bank[2].selectable && selected_bank != 2) {
-					selected_bank = 2;
-					printf("selected bank: %d\n", selected_bank);
+					buttons_action = BUTTONS_ACTION_BANK_CHANGE;
+					buttons_action_data = 2;
 				}
 				if ((buttons & CWIID_BTN_1) && !(buttons & CWIID_BTN_2) && !(buttons_change & CWIID_BTN_2) && bank[0].selectable && selected_bank != 0) {
-					selected_bank = 0;
-					printf("selected bank: %d\n", selected_bank);
+					buttons_action = BUTTONS_ACTION_BANK_CHANGE;
+					buttons_action_data = 0;
 				}
 				if ((buttons & CWIID_BTN_2) && !(buttons & CWIID_BTN_1) && !(buttons_change & CWIID_BTN_1) && bank[1].selectable && selected_bank != 1) {
-					selected_bank = 1;
-					printf("selected bank: %d\n", selected_bank);
+					buttons_action = BUTTONS_ACTION_BANK_CHANGE;
+					buttons_action_data = 1;
 				}
 
 
@@ -417,7 +459,7 @@ void mute(void *port_buf, int i) {
 	queued_notes.size = 0;
 	while(active_notes.size > 0) {
 		note_midi_channel = active_notes.note[active_notes.size - 1].midi_channel;
-		buffer = jack_midi_event_reserve(port_buf, i, 3);
+		buffer = jack_midi_event_reserve(port_buf, use_time, 3);
 		buffer[2] = active_notes.note[active_notes.size - 1].velocity;		/* velocity */
 		buffer[1] = active_notes.note[active_notes.size - 1].note_number;	/* note number */
 		buffer[0] = MIDI_NOTE_OFF + (note_midi_channel ? note_midi_channel : use_midi_channel) - 1;	/* note off, standard midi channel */
@@ -436,6 +478,20 @@ int process(jack_nframes_t nframes, void *arg) {
 		while(queued_notes.size > 0) {
 			note_on(queued_notes.note[queued_notes.size - 1], port_buf, i);
 			queued_notes.size--;
+		}
+		if (system_action != SYSTEM_ACTION_NONE) {
+			switch (system_action) {
+				case SYSTEM_ACTION_PATCH_INIT:
+					sendBankProgramChange(midi_bank_msb, midi_bank_lsb, midi_program, port_buf, i);
+					if (bank[selected_bank].selectable) {
+						sendBankProgramChange(bank[selected_bank].midi_bank_msb, bank[selected_bank].midi_bank_lsb, bank[selected_bank].midi_program, port_buf, i);
+					}
+					break;
+				case SYSTEM_ACTION_BANK_INIT:
+					sendBankProgramChange(bank[selected_bank].midi_bank_msb, bank[selected_bank].midi_bank_lsb, bank[selected_bank].midi_program, port_buf, i);
+					break;
+			}
+			system_action = SYSTEM_ACTION_NONE;
 		}
 		if (strummer_action != STRUMMER_ACTION_NONE) {
 			if (strummer_action == STRUMMER_ACTION_MID_DOWN || strummer_action == STRUMMER_ACTION_MID_UP) {
@@ -561,14 +617,14 @@ int process(jack_nframes_t nframes, void *arg) {
 			buffer = jack_midi_event_reserve(port_buf, i, 3);
 			uint8_t crossfader_midi_value = current_turntables_state.crossfader * 127 / CWIID_TURNTABLES_CROSSFADER_MAX;
 			buffer[2] = crossfader_midi_value;
-			buffer[1] = MIDI_BALANCE_MSB;
+			buffer[1] = MIDI_CC_BALANCE_MSB;
 			buffer[0] = MIDI_CONTROL_CHANGE + use_midi_channel - 1;	// control change
 			crossfader_action = CROSSFADER_ACTION_NONE;
 		}
 		if (effect_dial_action != EFFECT_DIAL_ACTION_NONE) {
 			buffer = jack_midi_event_reserve(port_buf, i, 3);
 			buffer[0] = MIDI_CONTROL_CHANGE + use_midi_channel - 1;	// control change
-			buffer[1] = MIDI_EFFECT_CTL_1_MSB;
+			buffer[1] = MIDI_CC_EFFECT_CTL_1_MSB;
 			int16_t signed_value;
 			
 			switch (effect_dial_action) {
@@ -592,6 +648,15 @@ int process(jack_nframes_t nframes, void *arg) {
 			}
 			buffer[2] = effect_dial_state.value;
 			effect_dial_action = EFFECT_DIAL_ACTION_NONE;
+		}
+		if (buttons_action != BUTTONS_ACTION_NONE) {
+			switch (buttons_action) {
+				case BUTTONS_ACTION_BANK_CHANGE:
+					selectBank(buttons_action_data, port_buf, i);
+					break;
+			}
+			buttons_action = BUTTONS_ACTION_NONE;
+			buttons_action_data = 0;
 		}
 
 	}
@@ -980,6 +1045,7 @@ void readPatchFromFile (const char *file) {
      *have been allocated by the parser.
      */
     xmlCleanupParser();
+    system_action = SYSTEM_ACTION_PATCH_INIT;
 }
 
 
@@ -999,6 +1065,7 @@ struct sigevent sigev;
 
 
 void init() {
+	system_action = SYSTEM_ACTION_NONE;
 	midi_channel = 0;
 	midi_bank_msb = MIDI_DATA_NULL;
 	midi_bank_lsb = MIDI_DATA_NULL;
@@ -1053,6 +1120,8 @@ void init() {
 
 	stick_action = STICK_ACTION_NONE;
 	stick_zone = STICK_ZONE_UNKNOWN;
+	buttons_action = BUTTONS_ACTION_NONE;
+	buttons_action_data = 0;
 	
 	drums_buttons_previous = 0;
 	

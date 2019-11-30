@@ -9,9 +9,7 @@
 	</xsd:complexType>
 
 	<xsd:complexType name="chordType">
-		<xsd:sequence>
-			<xsd:element name="note" type="noteType" maxOccurs="unbounded" />
-		</xsd:sequence>
+		<xsd:attribute name="name"   type="xsd:string"  use="optional" />
 		<xsd:attribute name="green"  type="xsd:boolean" use="optional" default="false" />
 		<xsd:attribute name="red"    type="xsd:boolean" use="optional" default="false" />
 		<xsd:attribute name="yellow" type="xsd:boolean" use="optional" default="false" />
@@ -27,9 +25,14 @@
 				</xsd:restriction>
 			</xsd:simpleType>
 		</xsd:attribute>
+
+		<xsd:sequence>
+			<xsd:element name="note" type="noteType" maxOccurs="unbounded" />
+		</xsd:sequence>
 	</xsd:complexType>
 
 	<xsd:complexType name="sequenceType">
+		<xsd:attribute name="name" type="xsd:string" use="optional" />
 		<xsd:attribute name="green"  type="xsd:boolean" use="optional" default="false" />
 		<xsd:attribute name="red"    type="xsd:boolean" use="optional" default="false" />
 		<xsd:attribute name="yellow" type="xsd:boolean" use="optional" default="false" />
@@ -42,6 +45,12 @@
 	</xsd:complexType>
 
 	<xsd:complexType name="BankType">
+		<xsd:attribute name="name" type="xsd:string" use="optional" />
+		<xsd:attribute name="midi_channel"  type="xsd:nonNegativeInteger" use="optional" />
+		<xsd:attribute name="midi_bank_msb" type="xsd:nonNegativeInteger" use="optional" />
+		<xsd:attribute name="midi_bank_lsb" type="xsd:nonNegativeInteger" use="optional" />
+		<xsd:attribute name="midi_program"  type="xsd:nonNegativeInteger" use="optional" />
+
 		<xsd:sequence>
 			<xsd:element name="chords">
 				<xsd:complexType>
@@ -60,12 +69,15 @@
 				</xsd:complexType>
 			</xsd:element>
 		</xsd:sequence>
-		<xsd:attribute name="midi_program" type="xsd:nonNegativeInteger" use="optional" />
-		<xsd:attribute name="midi_channel" type="xsd:nonNegativeInteger" use="optional" />
 	</xsd:complexType>
 
 	<xsd:complexType name="PatchType">
 		<xsd:attribute name="name" type="xsd:string" use="optional" />
+		<xsd:attribute name="midi_channel"  type="xsd:nonNegativeInteger" use="optional" />
+		<xsd:attribute name="midi_bank_msb" type="xsd:nonNegativeInteger" use="optional" />
+		<xsd:attribute name="midi_bank_lsb" type="xsd:nonNegativeInteger" use="optional" />
+		<xsd:attribute name="midi_program"  type="xsd:nonNegativeInteger" use="optional" />
+
 		<xsd:element name="banks">
 			<xsd:sequence>
 				<xsd:element name="bank" type="BankType" minOccurs="1" maxOccurs="3" />

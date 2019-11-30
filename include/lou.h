@@ -6,24 +6,26 @@
 #define MIDI_MODULATION_MAX  0x7F
 #define MIDI_DATA_NULL       0xFF   
 
-#define MIDI_NOTE_OFF           0x80
-#define MIDI_NOTE_ON            0x90
-#define MIDI_PITCH_WHEEL        0xE0
-#define MIDI_CONTROL_CHANGE     0xB0
-#define MIDI_CC_BANK_SELECT_MSB 0x00
-#define MIDI_CC_BANK_SELECT_LSB 0x20
-#define MIDI_CC_MODULATION_MSB  0x01
-#define MIDI_CC_MODULATION_LSB  0x21
-#define MIDI_CC_BREATH_CTL_MSB  0x02
-#define MIDI_CC_BREATH_CTL_LSB  0x22
-#define MIDI_CC_FOOT_CTL_MSB    0x04
-#define MIDI_CC_FOOT_CTL_LSB    0x24
-#define MIDI_CC_VOLUME_MSB      0x07
-#define MIDI_CC_VOLUME_LSB      0x27
-#define MIDI_BALANCE_MSB        0x08
-#define MIDI_BALANCE_LSB        0x28
-#define MIDI_EFFECT_CTL_1_MSB   0x0C
-#define MIDI_EFFECT_CTL_1_LSB   0x2C
+#define MIDI_NOTE_OFF       0x80
+#define MIDI_NOTE_ON        0x90
+#define MIDI_PROGRAM_CHANGE 0xC0
+#define MIDI_PITCH_WHEEL    0xE0
+#define MIDI_CONTROL_CHANGE 0xB0
+
+#define MIDI_CC_BANK_SELECT_MSB  0x00
+#define MIDI_CC_BANK_SELECT_LSB  0x20
+#define MIDI_CC_MODULATION_MSB   0x01
+#define MIDI_CC_MODULATION_LSB   0x21
+#define MIDI_CC_BREATH_CTL_MSB   0x02
+#define MIDI_CC_BREATH_CTL_LSB   0x22
+#define MIDI_CC_FOOT_CTL_MSB     0x04
+#define MIDI_CC_FOOT_CTL_LSB     0x24
+#define MIDI_CC_VOLUME_MSB       0x07
+#define MIDI_CC_VOLUME_LSB       0x27
+#define MIDI_CC_BALANCE_MSB      0x08
+#define MIDI_CC_BALANCE_LSB      0x28
+#define MIDI_CC_EFFECT_CTL_1_MSB 0x0C
+#define MIDI_CC_EFFECT_CTL_1_LSB 0x2C
 
 #define MAX_ACTIVE_NOTES_COUNT  120
 #define MAX_QUEUED_NOTES_COUNT  120
@@ -146,6 +148,11 @@ enum effect_dial_action_t {
 	EFFECT_DIAL_ACTION_ROTATE_COUNTER_CLOCKWISE
 } effect_dial_action;
 
+enum buttons_action_t {
+	BUTTONS_ACTION_NONE,
+	BUTTONS_ACTION_BANK_CHANGE
+} buttons_actions;
+
 
 struct effect_dial_state_t {
 	int8_t change;
@@ -155,17 +162,29 @@ struct effect_dial_state_t {
 	uint8_t  initial_value;
 } effect_dial_state;
 
+
+enum system_action_t {
+	SYSTEM_ACTION_NONE,
+	SYSTEM_ACTION_PATCH_INIT,
+	SYSTEM_ACTION_BANK_INIT
+} system_actions;
+
+unsigned char system_action;
 unsigned char touchbar_state;
 unsigned char touchbar_action;
 unsigned char strummer_state;
 unsigned char strummer_action;
 unsigned char whammy_state;
 unsigned char whammy_action;
+unsigned char buttons_action;
+unsigned char buttons_action_data;
 unsigned char stick_state[2];
 unsigned char stick_zone_average_value;
 unsigned char stick_zone_rotation_clockwise_counter;
 unsigned char stick_zone_rotation_counter_clockwise_counter;
 unsigned char last_sent_volume_value;
+
+
 
 struct stick_zone_value_accumulator {
 	unsigned int count;

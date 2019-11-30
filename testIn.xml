@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
-<patch name="test patch" midi_channel="1">
+<patch name="test patch" midi_channel="1" midi_bank_msb="0" midi_bank_lsb="0" midi_program="4">
 	<banks>
-		<bank name="intro" midi_channel="1">
+		<bank name="intro" midi_channel="1" midi_bank_msb="0" midi_bank_lsb="0" midi_program="3">
 			<sequences>
 				<sequence />
 			</sequences>
