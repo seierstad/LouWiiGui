@@ -13704,6 +13704,14 @@ else
 fi
 
 
+ac_fn_c_check_header_mongrel "$LINENO" "string.h" "ac_cv_header_string_h" "$ac_includes_default"
+if test "x$ac_cv_header_string_h" = xyes; then :
+
+else
+  as_fn_error $? "string.h not found" "$LINENO" 5
+fi
+
+
 ac_fn_c_check_header_mongrel "$LINENO" "time.h" "ac_cv_header_time_h" "$ac_includes_default"
 if test "x$ac_cv_header_time_h" = xyes; then :
 

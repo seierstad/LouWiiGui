@@ -24,6 +24,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <stddef.h>
+#include <string.h>
 
 #include <jack/jack.h>
 #include <jack/midiport.h>
@@ -95,7 +96,6 @@ void sendBankProgramChange(int bank_msb, int bank_lsb, int program, void *port_b
 void selectBank (unsigned char bank_number, void *port_buf, jack_nframes_t time) {
     if (bank[bank_number].selectable && selected_bank != bank_number) {
         selected_bank = bank_number;
-        printf("prog: %d\tmvb: %d\tlvb: %d\n\n", bank[selected_bank].midi.program, bank[selected_bank].midi.bank_msb, bank[selected_bank].midi.bank_lsb);
 
         if (
             bank[selected_bank].midi.program != MIDI_DATA_NULL || 
@@ -196,7 +196,7 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
 
                 break;
             case CWIID_MESG_GUITAR:
-                printf("\n\ngitarbeskjed\n\n");
+                printf("guitar message\n");
                 // set strummer_state and strummer_action
                 if (((mesg[i].guitar_mesg.buttons & CWIID_GUITAR_BTN_DOWN) == CWIID_GUITAR_BTN_DOWN) && strummer_state != STRUMMER_STATE_DOWN) {
                     strummer_state = STRUMMER_STATE_DOWN;
@@ -402,7 +402,6 @@ void note_on(struct note_t note, void* port_buf, int i) {
     current_note.note_number = note.note_number + transpose;
     current_note.midi_channel = use_midi_channel;
     
-    printf("use: %d, bank: %d, note: %d, patch: %d\n", use_midi_channel, bank[selected_bank].midi.channel, note.midi_channel, midi.channel);
     buffer = jack_midi_event_reserve(port_buf, i, 3);
     buffer[2] = note.velocity;        /* velocity */
     buffer[1] = note.note_number + transpose;    /* note number */
@@ -411,35 +410,34 @@ void note_on(struct note_t note, void* port_buf, int i) {
     active_notes.size++;
 }
 
-void strum_chord(struct chord_t chord, void* port_buf, int i) {
+void strum_chord(struct chord_t chord, unsigned char direction, void* port_buf, int i) {
     int q,r = 0;
     for (q = 0; q < chord.size; q++) {
-        if (chord.note[q].delay == 0) {
-            note_on(chord.note[q], port_buf, i);
-        } 
-        else {
-            if (chord.note[q].velocity > 0) {
-                while (delayed_notes[r].note.velocity != 0) {
-                    r++;
-                }
-                delayed_notes[r].note = chord.note[q];
-                delayed_notes[r].sevent.sigev_signo = SIGUSR1;
-                delayed_notes[r].sevent.sigev_notify = SIGEV_SIGNAL;
-                delayed_notes[r].sevent.sigev_value.sival_ptr = &(delayed_notes[r]);
+    	if (chord.note[q].direction == BOTH || chord.note[q].direction == direction) {
+	        if (chord.note[q].delay == 0) {
+	            note_on(chord.note[q], port_buf, i);
+	        } else if (chord.note[q].velocity > 0) {
+	            while (delayed_notes[r].note.velocity != 0) {
+	                r++;
+	            }
+	            delayed_notes[r].note = chord.note[q];
+	            delayed_notes[r].sevent.sigev_signo = SIGUSR1;
+	            delayed_notes[r].sevent.sigev_notify = SIGEV_SIGNAL;
+	            delayed_notes[r].sevent.sigev_value.sival_ptr = &(delayed_notes[r]);
 
-                timer_create(CLOCK_MONOTONIC, &(delayed_notes[r].sevent), &(delayed_notes[r].timer));
+	            timer_create(CLOCK_MONOTONIC, &(delayed_notes[r].sevent), &(delayed_notes[r].timer));
 
-                delayed_notes[r].note.velocity = chord.note[q].velocity;
-                delayed_notes[r].note.note_number = chord.note[q].note_number;
-                delayed_notes[r].time.it_value.tv_sec = chord.note[q].delay / 1000;
-                delayed_notes[r].time.it_value.tv_nsec = (chord.note[q].delay * 1000000) % 1000000000;
-                delayed_notes[r].time.it_interval.tv_sec = 0;
-                delayed_notes[r].time.it_interval.tv_nsec = 0;
+	            delayed_notes[r].note.velocity = chord.note[q].velocity;
+	            delayed_notes[r].note.note_number = chord.note[q].note_number;
+	            delayed_notes[r].time.it_value.tv_sec = chord.note[q].delay / 1000;
+	            delayed_notes[r].time.it_value.tv_nsec = (chord.note[q].delay * 1000000) % 1000000000;
+	            delayed_notes[r].time.it_interval.tv_sec = 0;
+	            delayed_notes[r].time.it_interval.tv_nsec = 0;
 
-                timer_settime(delayed_notes[r].timer, 0, &(delayed_notes[r].time), NULL);
-            }
-        }
-    }
+	            timer_settime(delayed_notes[r].timer, 0, &(delayed_notes[r].time), NULL);
+	        }
+	    }
+	}
 }
 
 void mute(void *port_buf, int i) {
@@ -473,6 +471,7 @@ int process(jack_nframes_t nframes, void *arg) {
     unsigned char* buffer;
     jack_midi_clear_buffer(port_buf);
     int use_midi_channel = USE_MIDI_CHANNEL;
+    unsigned char strummer_direction;
 
     for(i = 0; i < nframes; i++) {
         while(queued_notes.size > 0) {
@@ -495,16 +494,22 @@ int process(jack_nframes_t nframes, void *arg) {
         }
         if (strummer_action != STRUMMER_ACTION_NONE) {
             if (strummer_action == STRUMMER_ACTION_MID_DOWN || strummer_action == STRUMMER_ACTION_MID_UP) {
+            	strummer_direction = (strummer_action == STRUMMER_ACTION_MID_DOWN) ? DOWN : UP;
             	if(bank[selected_bank].chord[chord_state].size) {
-	                strum_chord(bank[selected_bank].chord[chord_state], port_buf, i);
+	                strum_chord(bank[selected_bank].chord[chord_state], strummer_direction, port_buf, i);
 	            } else if (bank[selected_bank].sequence[chord_state].length) {
-	            	strum_chord(bank[selected_bank].sequence[chord_state].step[bank[selected_bank].sequence[chord_state].current_step++], port_buf, i);
-	            	if (bank[selected_bank].sequence[chord_state].current_step == bank[selected_bank].sequence[chord_state].length) {
-	            		bank[selected_bank].sequence[chord_state].current_step = 0;
+	            	if (chord_state != previous_strummed_chord) {
+	            		if (!bank[selected_bank].sequence[chord_state].keep_position) {
+	            			bank[selected_bank].sequence[chord_state].position = 0;
+	            		}
 	            	}
-	            	fprintf(stderr, "len: %d,  size: %d, current: %d/n", bank[selected_bank].sequence[chord_state].length, bank[selected_bank].sequence[chord_state].step[0].size, bank[selected_bank].sequence[chord_state].current_step);
+	            	strum_chord(bank[selected_bank].sequence[chord_state].step[bank[selected_bank].sequence[chord_state].position++], strummer_direction, port_buf, i);
+	            	if (bank[selected_bank].sequence[chord_state].position == bank[selected_bank].sequence[chord_state].length) {
+	            		bank[selected_bank].sequence[chord_state].position = 0;
+	            	}
 	            }
                 strummer_action = STRUMMER_ACTION_NONE;
+				previous_strummed_chord = chord_state;
             } else {
                 if (strummer_state != STRUMMER_STATE_SUSTAINED) {
                     mute(port_buf, i);
@@ -883,7 +888,8 @@ void freeStateMemory () {
 }
 
 void readNote (xmlNode *note_element, struct note_t *noteData) {
-	int note_number = 0, velocity = 0, delay = 0, midi_channel = 0;
+	int note_number = 0, velocity = 0, delay = 0, midi_channel = 0, direction = BOTH;
+	char directionString[5] = "    \0"; 
 
     if (xmlGetProp(note_element, "note_number")) {
         sscanf(xmlGetProp(note_element, "note_number"), "%d", &note_number);
@@ -896,6 +902,18 @@ void readNote (xmlNode *note_element, struct note_t *noteData) {
         printf("\tvelocity: %d", velocity);
     }
     (*noteData).velocity = velocity;
+
+    if (xmlGetProp(note_element, "direction")) {
+        sscanf(xmlGetProp(note_element, "direction"), "%s", directionString);
+        printf("\tdirection: %s", directionString);
+    }
+    if (strcmp(directionString, "up") == 0) {
+  		(*noteData).direction = UP;
+  	} else if (strcmp(directionString, "down") == 0) {
+	  	(*noteData).direction = DOWN;
+	} else {
+		(*noteData).direction = BOTH;
+	}
 
     if (xmlGetProp(note_element, "delay")) {
         sscanf(xmlGetProp(note_element, "delay"), "%d", &delay);
@@ -910,6 +928,7 @@ void readNote (xmlNode *note_element, struct note_t *noteData) {
     } else {
         (*noteData).midi_channel = 0;
     }
+
     printf("\n");
 }
 
@@ -1054,9 +1073,17 @@ void readPatchFromFile (const char *file) {
                                         if (xmlGetProp(sequence_element, "number_of_steps")) {
                                             sscanf(xmlGetProp(sequence_element, "number_of_steps"), "%d", &number_of_steps);
                                         }
+
+                                        bank[bank_index].sequence[sequence_index].keep_position = 0;
+                                        if (xmlGetProp(sequence_element, "keep_position")) {
+											bank[bank_index].sequence[sequence_index].keep_position = 1;
+                                        }
+
                                         printf("\n");
                                         bank[bank_index].sequence[sequence_index].length = number_of_steps;
                                         bank[bank_index].sequence[sequence_index].step = malloc(number_of_steps * sizeof(struct chord_t));
+                                        bank[bank_index].sequence[sequence_index].position = 0;
+                                        
 
                                         step_element = sequence_element->children;
                                         step_index = 0;

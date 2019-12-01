@@ -49,6 +49,8 @@ AC_CHECK_HEADER([signal.h],,
 	AC_MSG_ERROR([signal.h not found]))
 AC_CHECK_HEADER([unistd.h],,
 	AC_MSG_ERROR([unistd.h not found]))
+AC_CHECK_HEADER([string.h],,
+	AC_MSG_ERROR([string.h not found]))
 AC_CHECK_HEADER([time.h],,
 	AC_MSG_ERROR([time.h not found]))
 AC_CHECK_HEADER([jack/jack.h],,

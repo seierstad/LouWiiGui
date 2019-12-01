@@ -81,6 +81,12 @@ enum {
 } strummer_actions;
 
 enum {
+	BOTH,
+	UP,
+	DOWN
+} directions;
+
+enum {
 	WHAMMY_ACTION_NONE,
 	WHAMMY_ACTION_UP,
 	WHAMMY_ACTION_DOWN
@@ -193,6 +199,7 @@ struct stick_zone_value_accumulator {
 struct stick_zone_value_accumulator stick_zone_acc;
 
 struct note_t {
+	unsigned char direction;
 	unsigned short int velocity;
 	unsigned short int note_number;
 	unsigned int delay;  // used for strumming patterns (not implemented yet)
@@ -207,7 +214,8 @@ struct chord_t {
 struct sequence_t {
 	struct chord_t* step;
 	int length;
-	unsigned char current_step;
+	unsigned char keep_position;
+	unsigned char position;
 };
 
 struct midi_info_t {
@@ -231,6 +239,7 @@ struct bank_t *bank;
 
 // current fret button + drum trigger states
 unsigned int chord_state = 0;
+unsigned int previous_strummed_chord = 0xFFFF;
 unsigned int drums_action = 0;
 unsigned int drums_state = 0;
 uint8_t drums_buttons_previous = 0;
