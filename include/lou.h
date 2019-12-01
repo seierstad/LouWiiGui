@@ -204,18 +204,25 @@ struct chord_t {
 	int size;
 };
 
-// for all combinations of fret buttons: which notes to trigger
-struct chord_t chord[ALL_COLOR_COMBINATIONS];  
+struct sequence_t {
+	struct chord_t* step;
+	int length;
+	unsigned char current_step;
+};
 
+struct midi_info_t {
+	int channel;
+	int bank_msb;
+	int bank_lsb;
+	int program;
+};
 
 // a bank is a collection of chords and sequences
 struct bank_t {
 	char selectable;
-	int midi_channel;
-	int midi_bank_msb;
-	int midi_bank_lsb;
-	int midi_program;
+	struct midi_info_t midi;
 	struct chord_t chord[ALL_COLOR_COMBINATIONS];
+	struct sequence_t sequence[ALL_COLOR_COMBINATIONS];
 };
 
 #define MAX_BANKS_COUNT 3
@@ -252,11 +259,7 @@ struct itimerspec time_left;
 cwiid_wiimote_t *wiimote;	/* wiimote handle */
 cwiid_mesg_callback_t cwiid_callback;
 
-int midi_channel;
-int midi_bank_msb;
-int midi_bank_lsb;
-int midi_program;
-int bank_midi_channel;
+struct midi_info_t midi;
 int8_t transpose;
 int8_t selected_bank;
 

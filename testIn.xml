@@ -1,10 +1,7 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
-<patch name="test patch" midi_channel="1" midi_bank_msb="0" midi_bank_lsb="0" midi_program="4">
+<patch name="test patch" midi_channel="1" midi_program="3">
 	<banks>
-		<bank name="intro" midi_channel="1" midi_bank_msb="0" midi_bank_lsb="0" midi_program="3">
-			<sequences>
-				<sequence />
-			</sequences>
+		<bank name="intro" midi_channel="1" midi_program="2">
 			<chords>
 				<chord number_of_notes="3">
 					<note note_number="55" velocity="100" />
@@ -178,7 +175,7 @@
 				</chord>
 			</chords>
 		</bank>
-		<bank name="verse" midi_channel="11">
+		<bank name="verse">
 			<chords>
 				<chord green="true" number_of_notes="2" name="single note E">
 					<note note_number="28" velocity="100" midi_channel="3" />
@@ -186,13 +183,27 @@
 				</chord>
 			</chords>
 		</bank>
-		<bank name="chorus">
+		<bank name="chorus" midi_program="10">
 			<chords>
 				<chord green="true" number_of_notes="2" name="single note E">
 					<note note_number="28" velocity="100" midi_channel="3" />
 					<note note_number="77" velocity="127" />
 				</chord>
 			</chords>
+			<sequences>
+				<sequence green="true" orange="true" number_of_steps="3">
+					<chord number_of_notes="2">
+						<note note_number="60" velocity="100" />
+						<note note_number="67" velocity="110" />
+					</chord>
+					<chord number_of_notes="1">
+						<note note_number="48" velocity="124" />
+					</chord>
+					<chord number_of_notes="1">
+						<note note_number="53" velocity="45" />
+					</chord>
+				</sequence>
+			</sequences>
 		</bank>
 	</banks>
 </patch>
