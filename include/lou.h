@@ -27,9 +27,10 @@
 #define MIDI_CC_EFFECT_CTL_1_MSB 0x0C
 #define MIDI_CC_EFFECT_CTL_1_LSB 0x2C
 
-#define MAX_ACTIVE_NOTES_COUNT  120
-#define MAX_QUEUED_NOTES_COUNT  120
-#define MAX_DELAYED_NOTES_COUNT 120
+#define MAX_ACTIVE_NOTES_COUNT   120
+#define MAX_QUEUED_NOTES_COUNT   120
+#define MAX_DELAYED_NOTES_COUNT  120
+#define MAX_SUSTAIN_STRINGS_COUNT 12
 
 // flags for chord selection / drums status
 #define NONE   0x00
@@ -85,6 +86,12 @@ enum {
 	UP,
 	DOWN
 } directions;
+
+enum {
+	SUSTAIN_OFF,      // the note ends when the strummer returns to mid position
+	SUSTAIN_SEQUENCE, // the note ends when the same note is struck on the same midi channel again, or until a different sequence/chord is strummed
+	SUSTAIN_STRING    // the note ends when a new note is triggered on the same string, or when a chord is strummed
+} sustain_modes;
 
 enum {
 	WHAMMY_ACTION_NONE,
@@ -204,6 +211,8 @@ struct note_t {
 	unsigned short int note_number;
 	unsigned int delay;  // used for strumming patterns (not implemented yet)
 	unsigned int midi_channel;
+	unsigned char sustain_mode;
+	unsigned char string;
 };
 
 struct chord_t {
@@ -282,3 +291,5 @@ struct delayed_note_t {
 };
 
 struct delayed_note_t *delayed_notes;
+
+struct note_t *sustain_string;

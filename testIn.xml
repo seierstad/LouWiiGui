@@ -190,21 +190,27 @@
 					<note note_number="77" velocity="127" />
 				</chord>
 				<chord green="true" red="true" yellow="true" number_of_notes="5" name="E major">
-					<note note_number="52" velocity="127" direction="up" />
+					<note note_number="52" velocity="127" direction="up" midi_channel="3" />
 					<note note_number="71" velocity="100" direction="down" />
 					<note note_number="76" velocity="127" direction="down" />
 					<note note_number="80" velocity="100" direction="down" />
 					<note note_number="83" velocity="127" direction="down" />
 				</chord>
+				<chord red="true" yellow="true" number_of_notes="1" name="G# bass note">
+					<note note_number="56" velocity="127" direction="down" midi_channel="3" />
+				</chord>				
 				<chord red="true" yellow="true" blue="true" number_of_notes="5" name="A major">
-					<note note_number="57" velocity="127" direction="up" />
+					<note note_number="57" velocity="127" direction="up" midi_channel="3" />
 					<note note_number="69" velocity="100" direction="down" />
 					<note note_number="76" velocity="127" direction="down" />
 					<note note_number="81" velocity="100" direction="down" />
 					<note note_number="85" velocity="127" direction="down" />
 				</chord>
+				<chord red="true" yellow="true" blue="true" orange="true" number_of_notes="1" name="A# bass note">
+					<note note_number="58" velocity="127" direction="down" midi_channel="3" />
+				</chord>
 				<chord yellow="true" blue="true" orange="true" number_of_notes="5" name="B major">
-					<note note_number="59" velocity="127" direction="up" />
+					<note note_number="59" velocity="127" direction="up" midi_channel="3" />
 					<note note_number="71" velocity="100" direction="down" />
 					<note note_number="78" velocity="127" direction="down" />
 					<note note_number="83" velocity="100" direction="down" />
@@ -214,72 +220,72 @@
 			<sequences>
 				<sequence green="true" orange="true" number_of_steps="3">
 					<chord number_of_notes="1">
-						<note note_number="83" velocity="100" />
+						<note note_number="83" velocity="100" sustain="string" string="1" />
 					</chord>
 					<chord number_of_notes="1">
-						<note note_number="88" velocity="124" />
+						<note note_number="88" velocity="124" sustain="string" string="2" />
 					</chord>
 					<chord number_of_notes="1">
-						<note note_number="87" velocity="45" />
+						<note note_number="87" velocity="45" sustain="string" string="3" />
 					</chord>
 				</sequence>
 				<sequence green="true" blue="true" number_of_steps="3">
 					<chord number_of_notes="1">
-						<note note_number="81" velocity="100" />
+						<note note_number="81" velocity="100" sustain="string" string="1" />
 					</chord>
 					<chord number_of_notes="1">
-						<note note_number="88" velocity="124" />
+						<note note_number="88" velocity="124" sustain="string" string="2" />
 					</chord>
 					<chord number_of_notes="1">
-						<note note_number="86" velocity="45" />
+						<note note_number="86" velocity="45" sustain="string" string="3" />
 					</chord>
 				</sequence>
 				<sequence green="true" red="true" number_of_steps="3">
 					<chord number_of_notes="1">
-						<note note_number="79" velocity="100" />
+						<note note_number="79" velocity="100" sustain="string" string="1" />
 					</chord>
 					<chord number_of_notes="1">
-						<note note_number="88" velocity="124" />
+						<note note_number="88" velocity="124" sustain="string" string="2" />
 					</chord>
 					<chord number_of_notes="1">
-						<note note_number="86" velocity="45" />
+						<note note_number="86" velocity="45" sustain="string" string="3" />
 					</chord>
 				</sequence>
 				<sequence green="true" yellow="true" number_of_steps="8">
 					<chord number_of_notes="1">
-						<note note_number="81" velocity="100" />
+						<note note_number="81" velocity="100" sustain="string" string="1" />
 					</chord>
 					<chord number_of_notes="1">
-						<note note_number="88" velocity="124" />
+						<note note_number="88" velocity="124" sustain="string" string="2" />
 					</chord>
 					<chord number_of_notes="1">
-						<note note_number="85" velocity="45" />
+						<note note_number="85" velocity="45" sustain="string" string="3" />
 					</chord>
 					<chord number_of_notes="1">
-						<note note_number="81" velocity="100" />
+						<note note_number="81" velocity="100" sustain="string" string="1" />
 					</chord>
 					<chord number_of_notes="1">
-						<note note_number="88" velocity="124" />
+						<note note_number="88" velocity="124" sustain="string" string="2" />
 					</chord>
 					<chord number_of_notes="1">
-						<note note_number="85" velocity="45" />
+						<note note_number="85" velocity="45" sustain="string" string="3" />
 					</chord>
 					<chord number_of_notes="1">
-						<note note_number="81" velocity="100" />
+						<note note_number="81" velocity="100" sustain="string" string="1" />
 					</chord>
 					<chord number_of_notes="1">
-						<note note_number="88" velocity="124" />
+						<note note_number="88" velocity="124" sustain="string" string="2" />
 					</chord>
 				</sequence>
 				<sequence green="true" number_of_steps="3">
 					<chord number_of_notes="1">
-						<note note_number="76" velocity="100" />
+						<note note_number="76" velocity="100" sustain="string" string="1" />
 					</chord>
 					<chord number_of_notes="1">
-						<note note_number="83" velocity="124" />
+						<note note_number="83" velocity="124" sustain="string" string="2" />
 					</chord>
 					<chord number_of_notes="1">
-						<note note_number="79" velocity="45" />
+						<note note_number="79" velocity="45" sustain="string" string="3" />
 					</chord>
 				</sequence>
 			</sequences>

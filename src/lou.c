@@ -46,6 +46,9 @@ void neio(int sig, siginfo_t *si, void *uc) {
     dn = (struct delayed_note_t *) si->si_value.sival_ptr;
     queued_notes.note[queued_notes.size].velocity = dn->note.velocity;
     queued_notes.note[queued_notes.size].note_number = dn->note.note_number;
+    queued_notes.note[queued_notes.size].midi_channel = dn->note.midi_channel;
+    queued_notes.note[queued_notes.size].sustain_mode = dn->note.sustain_mode;
+    queued_notes.note[queued_notes.size].string = dn->note.string;
     queued_notes.size++;
     dn->note.velocity = 0;
 }
@@ -401,13 +404,31 @@ void note_on(struct note_t note, void* port_buf, int i) {
     current_note.velocity = note.velocity;
     current_note.note_number = note.note_number + transpose;
     current_note.midi_channel = use_midi_channel;
-    
-    buffer = jack_midi_event_reserve(port_buf, i, 3);
-    buffer[2] = note.velocity;        /* velocity */
-    buffer[1] = note.note_number + transpose;    /* note number */
-    buffer[0] = MIDI_NOTE_ON + use_midi_channel - 1;    /* note on */
-    active_notes.note[active_notes.size] = current_note;
-    active_notes.size++;
+    current_note.sustain_mode = note.sustain_mode;
+    current_note.string = note.string;
+
+    if (current_note.sustain_mode == SUSTAIN_STRING) {
+    	if (sustain_string[current_note.string].note_number != 0) {
+    		buffer = jack_midi_event_reserve(port_buf, i, 3);
+		    buffer[2] = sustain_string[current_note.string].velocity;	/* velocity */
+		    buffer[1] = sustain_string[current_note.string].note_number; /* previous note played on string */
+		    buffer[0] = MIDI_NOTE_OFF + sustain_string[current_note.string].midi_channel - 1;    /* note off */
+    	}
+
+		buffer = jack_midi_event_reserve(port_buf, i, 3);
+	    buffer[2] = current_note.velocity;        /* velocity */
+	    buffer[1] = current_note.note_number;     /* note number */
+	    buffer[0] = MIDI_NOTE_ON + use_midi_channel - 1;
+
+    	sustain_string[current_note.string] = current_note;
+    } else {
+	    buffer = jack_midi_event_reserve(port_buf, i, 3);
+	    buffer[2] = note.velocity;        /* velocity */
+	    buffer[1] = note.note_number + transpose;    /* note number */
+	    buffer[0] = MIDI_NOTE_ON + use_midi_channel - 1;    /* note on */
+	    active_notes.note[active_notes.size] = current_note;
+	    active_notes.size++;
+	}
 }
 
 void strum_chord(struct chord_t chord, unsigned char direction, void* port_buf, int i) {
@@ -429,6 +450,9 @@ void strum_chord(struct chord_t chord, unsigned char direction, void* port_buf, 
 
 	            delayed_notes[r].note.velocity = chord.note[q].velocity;
 	            delayed_notes[r].note.note_number = chord.note[q].note_number;
+	            delayed_notes[r].note.midi_channel = chord.note[q].midi_channel;
+	            delayed_notes[r].note.sustain_mode = chord.note[q].sustain_mode;
+	            delayed_notes[r].note.string = chord.note[q].string;
 	            delayed_notes[r].time.it_value.tv_sec = chord.note[q].delay / 1000;
 	            delayed_notes[r].time.it_value.tv_nsec = (chord.note[q].delay * 1000000) % 1000000000;
 	            delayed_notes[r].time.it_interval.tv_sec = 0;
@@ -455,7 +479,9 @@ void mute(void *port_buf, int i) {
         delayed_notes[j].note.velocity = 0;
     }
     queued_notes.size = 0;
-    while(active_notes.size > 0) {
+
+    int sustained_notes_count = 0;
+    while(active_notes.size > sustained_notes_count) {
         note_midi_channel = active_notes.note[active_notes.size - 1].midi_channel;
         buffer = jack_midi_event_reserve(port_buf, use_time, 3);
         buffer[2] = active_notes.note[active_notes.size - 1].velocity;        /* velocity */
@@ -463,6 +489,20 @@ void mute(void *port_buf, int i) {
         buffer[0] = MIDI_NOTE_OFF + (note_midi_channel ? note_midi_channel : use_midi_channel) - 1;    /* note off, standard midi channel */
         active_notes.size--;
     }
+}
+
+void mute_string_notes (void *port_buf, int i) {
+	unsigned char* buffer;
+	int j;
+	for (j = 0; j < MAX_SUSTAIN_STRINGS_COUNT; j++) {
+		if (sustain_string[j].note_number) {
+		    buffer = jack_midi_event_reserve(port_buf, i, 3);
+		    buffer[2] = sustain_string[j].velocity;        /* velocity */
+		    buffer[1] = sustain_string[j].note_number;    /* note number */
+		    buffer[0] = MIDI_NOTE_OFF + sustain_string[j].midi_channel - 1;    /* note off */
+			sustain_string[i].note_number = 0;
+		}
+	}
 }
 
 int process(jack_nframes_t nframes, void *arg) {
@@ -496,6 +536,9 @@ int process(jack_nframes_t nframes, void *arg) {
             if (strummer_action == STRUMMER_ACTION_MID_DOWN || strummer_action == STRUMMER_ACTION_MID_UP) {
             	strummer_direction = (strummer_action == STRUMMER_ACTION_MID_DOWN) ? DOWN : UP;
             	if(bank[selected_bank].chord[chord_state].size) {
+            		if (chord_state != previous_strummed_chord) {
+            			mute_string_notes(port_buf, i);
+            		}
 	                strum_chord(bank[selected_bank].chord[chord_state], strummer_direction, port_buf, i);
 	            } else if (bank[selected_bank].sequence[chord_state].length) {
 	            	if (chord_state != previous_strummed_chord) {
@@ -889,7 +932,9 @@ void freeStateMemory () {
 
 void readNote (xmlNode *note_element, struct note_t *noteData) {
 	int note_number = 0, velocity = 0, delay = 0, midi_channel = 0, direction = BOTH;
-	char directionString[5] = "    \0"; 
+	char directionString[5] = "    \0";
+	char sustainString[9] = "";
+	int string = 0;
 
     if (xmlGetProp(note_element, "note_number")) {
         sscanf(xmlGetProp(note_element, "note_number"), "%d", &note_number);
@@ -914,6 +959,26 @@ void readNote (xmlNode *note_element, struct note_t *noteData) {
 	} else {
 		(*noteData).direction = BOTH;
 	}
+
+    if (xmlGetProp(note_element, "sustain")) {
+        sscanf(xmlGetProp(note_element, "sustain"), "%s", sustainString);
+        printf("\tsustain: %s", sustainString);
+    }
+    if (strcmp(sustainString, "string") == 0) {
+  		(*noteData).sustain_mode = SUSTAIN_STRING;
+
+	    if (xmlGetProp(note_element, "string")) {
+	        sscanf(xmlGetProp(note_element, "string"), "%d", &string);
+	        printf("\tstring: %d", string);
+	    }
+	    (*noteData).string = string;
+
+  	} else if (strcmp(sustainString, "sequence") == 0) {
+	  	(*noteData).sustain_mode = SUSTAIN_SEQUENCE;
+	} else {
+		(*noteData).sustain_mode = SUSTAIN_OFF;
+	}
+
 
     if (xmlGetProp(note_element, "delay")) {
         sscanf(xmlGetProp(note_element, "delay"), "%d", &delay);
@@ -945,7 +1010,6 @@ void readMidiInfo (xmlNode *node, struct midi_info_t *midiData) {
     if (xmlGetProp(node, "midi_program")) {
         sscanf(xmlGetProp(node, "midi_program"), "%d", &(*midiData).program);
     }
-
 }
 
 int getFretStatus (xmlNode* node) {
@@ -1144,12 +1208,6 @@ void readPatchFromFile (const char *file) {
 
 
 
-
-
-
-
-
-
 struct sigevent sigev;
 
 
@@ -1190,6 +1248,7 @@ void init() {
         bank[i].selectable = 0;
     }    
 
+    sustain_string = malloc(MAX_SUSTAIN_STRINGS_COUNT * sizeof(struct note_t));
     delayed_notes = malloc(MAX_DELAYED_NOTES_COUNT * sizeof(struct delayed_note_t));
     for(i = 0; i < MAX_DELAYED_NOTES_COUNT; i++){
         delayed_notes[i].note.velocity = 0;

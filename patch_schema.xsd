@@ -15,6 +15,16 @@
 				</xsd:restriction>
 			</xsd:simpleType>
 		</xsd:attribute>
+		<xsd:attribute name="sustain" use="optional" default="off">
+			<xsd:simpleType>
+				<xsd:restriction base="xsd:string">
+					<xsd:enumeration value="off" />
+					<xsd:enumeration value="sequence" />
+					<xsd:enumeration value="string" />
+				</xsd:restriction>
+			</xsd:simpleType>
+		</xsd:attribute>
+		<xsd:attribute name="string" type="xsd:nonNegativeInteger" use="optional" />
 	</xsd:complexType>
 
 	<xsd:complexType name="chordType">
