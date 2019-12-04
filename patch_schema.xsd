@@ -27,6 +27,19 @@
 		<xsd:attribute name="string" type="xsd:nonNegativeInteger" use="optional" />
 	</xsd:complexType>
 
+	<xsd:complexType name="ccMessageType">
+		<xsd:attribute name="midi_channel" type="xsd:nonNegativeInteger" use="optional" />
+		<xsd:attribute name="parameter" type="xsd:nonNegativeInteger" use="required" />
+		<xsd:attribute name="value" type="xsd:nonNegativeInteger" use="required" />
+	</xsd:complexType>
+
+	<xsd:complexType name="ccMessagesType">
+		<xsd:attribute name="number_of_messages" type="xsd:nonNegativeInteger" use="required" />
+		<xsd:sequence>
+			<xsd:element name="message" type="ccMessageType" maxOccurs="unbounded" />
+		</xsd:sequence>
+	</xsd:complexType>
+
 	<xsd:complexType name="chordType">
 		<xsd:attribute name="name"   type="xsd:string"  use="optional" />
 		<xsd:attribute name="green"  type="xsd:boolean" use="optional" default="false" />
@@ -49,9 +62,16 @@
 		<xsd:attribute name="blue"   type="xsd:boolean" use="optional" default="false" />
 		<xsd:attribute name="orange" type="xsd:boolean" use="optional" default="false" />
 		<xsd:attribute name="number_of_steps" type="xsd:positiveInteger" use="required" />
+		<xsd:attribute name="shared_counter" type="xsd:positiveInteger" use="optional" />
+		
 		<xsd:sequence>
 			<xsd:element name="step" type="chordType" maxOccurs="unbounded" />
 		</xsd:sequence>
+	</xsd:complexType>
+
+	<xsd:complexType name="counterType">
+		<xsd:attribute name="number" type="xsd:nonNegativeInteger" use="required" />
+		<xsd:attribute name="length" type="xsd:nonNegativeInteger" use="required" />
 	</xsd:complexType>
 
 	<xsd:complexType name="BankType">
@@ -61,7 +81,16 @@
 		<xsd:attribute name="midi_bank_lsb" type="xsd:nonNegativeInteger" use="optional" />
 		<xsd:attribute name="midi_program"  type="xsd:nonNegativeInteger" use="optional" />
 
+		<xsd:element name="cc" type="ccMessagesType" minOccurs="0" maxOccurs="unbound" />
+
 		<xsd:sequence>
+			<xsd:element name="sequence_counters">
+				<xsd:complexType>
+					<xsd:sequence>
+						<xsd:element name="counter" type="counterType" maxOccurs="unbounded" />
+					</xsd:sequence>
+				</xsd:complexType>
+			</xsd:element>
 			<xsd:element name="chords">
 				<xsd:complexType>
 					<xsd:sequence>
@@ -83,10 +112,13 @@
 
 	<xsd:complexType name="PatchType">
 		<xsd:attribute name="name" type="xsd:string" use="optional" />
-		<xsd:attribute name="midi_channel"  type="xsd:nonNegativeInteger" use="optional" />
+		<xsd:attribute name="midi_channel"  type="xsd:nonNegativeInteger" use="required" />
 		<xsd:attribute name="midi_bank_msb" type="xsd:nonNegativeInteger" use="optional" />
 		<xsd:attribute name="midi_bank_lsb" type="xsd:nonNegativeInteger" use="optional" />
 		<xsd:attribute name="midi_program"  type="xsd:nonNegativeInteger" use="optional" />
+		<xsd:attribute name="number_of_counters" type="xsd:nonNegativeInteger" use="optional" default="0" />
+
+		<xsd:element name="cc" type="ccMessagesType" minOccurs="0" maxOccurs="unbound" />
 
 		<xsd:element name="banks">
 			<xsd:sequence>
