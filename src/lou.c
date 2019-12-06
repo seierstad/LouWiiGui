@@ -96,6 +96,16 @@ void sendBankProgramChange(int bank_msb, int bank_lsb, int program, void *port_b
 
 }
 
+void sendCCMessage(struct cc_message_t cc, void *port_buf, jack_nframes_t time) {
+	int use_midi_channel = (cc.channel != MIDI_DATA_NULL) ? cc.channel : USE_MIDI_CHANNEL;
+    printf("sender CC\tverdi: %d,\tparameter: %d,\tkanal: %d\n", cc.value, cc.parameter, use_midi_channel);
+	unsigned char *buffer = jack_midi_event_reserve(port_buf, time, 3);
+
+	buffer[2] = cc.value;
+	buffer[1] = cc.parameter;
+	buffer[0] = MIDI_CONTROL_CHANGE + use_midi_channel - 1;
+}
+
 void selectBank (unsigned char bank_number, void *port_buf, jack_nframes_t time) {
     if (bank[bank_number].selectable && selected_bank != bank_number) {
         selected_bank = bank_number;
@@ -108,6 +118,14 @@ void selectBank (unsigned char bank_number, void *port_buf, jack_nframes_t time)
         } else {
             sendBankProgramChange(midi.bank_msb, midi.bank_lsb, midi.program, port_buf, time); 
         }
+
+    	fprintf(stderr, "selectBank kaller \t\t\t-----------------%d\n", bank[selected_bank].cc_length);
+        if (bank[selected_bank].cc_length > 0) {
+        	for (int j = 0; j < bank[selected_bank].cc_length; j++) {
+        		sendCCMessage(bank[selected_bank].cc[j], port_buf, time);
+        	}
+        }
+
         printf("selected bank: %d\n", selected_bank);
     }
 }
@@ -123,7 +141,6 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
     for (i=0; i < mesg_count; i++) {
         switch (mesg[i].type) {
             case CWIID_MESG_BTN:
-                printf("button\n");
                 buttons = ((uint16_t)mesg[i].btn_mesg.buttons);
                 buttons_change = buttons ^ buttons_previous;
                 buttons_previous = buttons;
@@ -150,7 +167,7 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
                 }
 
 
-                printf("buttons: %d\ntranspose: %d\n", buttons, transpose);
+                printf("buttons: %d\ttranspose: %d\n", buttons, transpose);
                 break;
             case CWIID_MESG_ACC:
                 printf("acc: x %d\ty %d\tz %d", mesg[i].acc_mesg.acc[0], mesg[i].acc_mesg.acc[1], mesg[i].acc_mesg.acc[2]);
@@ -199,13 +216,13 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
 
                 break;
             case CWIID_MESG_GUITAR:
-                printf("guitar message\n");
+                printf("guitar message: ");
                 // set strummer_state and strummer_action
                 if (((mesg[i].guitar_mesg.buttons & CWIID_GUITAR_BTN_DOWN) == CWIID_GUITAR_BTN_DOWN) && strummer_state != STRUMMER_STATE_DOWN) {
                     strummer_state = STRUMMER_STATE_DOWN;
                     strummer_action = STRUMMER_ACTION_MID_DOWN;
                     timer_settime(countdown_id, 0, &margin, NULL);
-                    printf("strum down\n");
+                    printf("strum down");
                 } else if (!((mesg[i].guitar_mesg.buttons & CWIID_GUITAR_BTN_DOWN) == CWIID_GUITAR_BTN_DOWN) && strummer_state == STRUMMER_STATE_DOWN) {
                     strummer_state = STRUMMER_STATE_MID;
                     strummer_action = STRUMMER_ACTION_DOWN_MID;
@@ -213,15 +230,15 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
                     if (time_left.it_value.tv_sec > 0 || time_left.it_value.tv_nsec > 0) {
                         strummer_state = STRUMMER_STATE_SUSTAINED;
                     }
-                    printf("strum neutral\n");
+                    printf("strum neutral");
                 } else if (((mesg[i].guitar_mesg.buttons & CWIID_GUITAR_BTN_UP) == CWIID_GUITAR_BTN_UP) && strummer_state != STRUMMER_STATE_UP) {
                     strummer_state = STRUMMER_STATE_UP;
                     strummer_action = STRUMMER_ACTION_MID_UP;
-                    printf("strum up\n");
+                    printf("strum up");
                 } else if (!((mesg[i].guitar_mesg.buttons & CWIID_GUITAR_BTN_UP) == CWIID_GUITAR_BTN_UP) && strummer_state == STRUMMER_STATE_UP) {
                     strummer_state = STRUMMER_STATE_MID;
                     strummer_action = STRUMMER_ACTION_UP_MID;
-                    printf("strum neutral\n");
+                    printf("strum neutral");
                 } else {
                     strummer_action = STRUMMER_ACTION_NONE;
                 }
@@ -339,6 +356,7 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
                     stick_zone_acc.value += distance_from_center;
             
                 }
+                printf("\n");
                 break;
             case CWIID_MESG_TURNTABLES:
                 printf("platespillerbeskjed\n");
@@ -519,15 +537,24 @@ int process(jack_nframes_t nframes, void *arg) {
             queued_notes.size--;
         }
         if (system_action != SYSTEM_ACTION_NONE) {
+
             switch (system_action) {
+
                 case SYSTEM_ACTION_PATCH_INIT:
                     sendBankProgramChange(midi.bank_msb, midi.bank_lsb, midi.program, port_buf, i);
                     if (bank[selected_bank].selectable) {
                         sendBankProgramChange(bank[selected_bank].midi.bank_msb, bank[selected_bank].midi.bank_lsb, bank[selected_bank].midi.program, port_buf, i);
                     }
-                    break;
-                case SYSTEM_ACTION_BANK_INIT:
-                    sendBankProgramChange(bank[selected_bank].midi.bank_msb, bank[selected_bank].midi.bank_lsb, bank[selected_bank].midi.program, port_buf, i);
+                    if (cc_length > 0) {
+                    	for (j = 0; j < cc_length; j++) {
+	                    	sendCCMessage(cc[j], port_buf, i);
+	                    }
+                    }
+                    if (bank[selected_bank].cc_length > 0) {
+                    	for (j = 0; j < bank[selected_bank].cc_length; j++) {
+                    		sendCCMessage(bank[selected_bank].cc[j], port_buf, i);
+                    	}
+                    }
                     break;
             }
             system_action = SYSTEM_ACTION_NONE;
@@ -567,8 +594,9 @@ int process(jack_nframes_t nframes, void *arg) {
             buffer[2] = (pitch_value & 0x3F80) >> 7;  // most significant bits
             buffer[1] = pitch_value & 0x007f;         // least significant bits
             buffer[0] = MIDI_PITCH_WHEEL + use_midi_channel - 1;    // pitch wheel change 
-            printf("whammy! %x, %x, %x, desimalt: %d\n", buffer[0], buffer[2], buffer[1], pitch_value);
+            printf("whammy! %x, %x, %x, desimalt: %d", buffer[0], buffer[2], buffer[1], pitch_value);
             whammy_action = WHAMMY_ACTION_NONE;
+            printf("\n");
         }
         if (touchbar_action != TOUCHBAR_ACTION_NONE) {
             buffer = jack_midi_event_reserve(port_buf, i, 3);
@@ -582,7 +610,7 @@ int process(jack_nframes_t nframes, void *arg) {
             touchbar_action = TOUCHBAR_ACTION_NONE;
         }
         if (stick_action != STICK_ACTION_NONE) {
-            printf("stick_action!\n");
+            printf("stick_action!\t");
             unsigned int volume = last_sent_volume_value;
             if (stick_action == STICK_ACTION_ROTATE_COUNTER_CLOCKWISE) {
                 volume += stick_zone_average_value / 2 ;
@@ -598,7 +626,7 @@ int process(jack_nframes_t nframes, void *arg) {
                 }
             }
             if (volume != last_sent_volume_value) {
-                printf("volume: %d\n", volume);
+                printf("volume: %d\t", volume);
                 buffer = jack_midi_event_reserve(port_buf, i, 3);
                 buffer[2] = volume;
                 buffer[1] = MIDI_CC_VOLUME_MSB;        // volume
@@ -606,6 +634,7 @@ int process(jack_nframes_t nframes, void *arg) {
                 last_sent_volume_value = volume;
             }
             stick_action = STICK_ACTION_NONE;
+            printf("\n");
         }
         while (drums_action != 0) {
             uint8_t send_note_off = 0;
@@ -1012,6 +1041,22 @@ void readMidiInfo (xmlNode *node, struct midi_info_t *midiData) {
     }
 }
 
+void readCCMessage (xmlNode *node, struct cc_message_t *cc) {
+
+    if (xmlGetProp(node, "midi_channel")) {
+		sscanf(xmlGetProp(node, "midi_channel"), "%d", &(*cc).channel);
+	} else {
+		(*cc).channel = MIDI_DATA_NULL;
+	}
+    if (xmlGetProp(node, "parameter")) {
+		sscanf(xmlGetProp(node, "parameter"), "%d", &(*cc).parameter);
+	}
+    if (xmlGetProp(node, "value")) {
+		sscanf(xmlGetProp(node, "value"), "%d", &(*cc).value);
+	}
+	printf("cc (lest):\tv: %d\tp: %d\t c: %d\n", (*cc).parameter, (*cc).value, (*cc).channel);
+}
+
 int getFretStatus (xmlNode* node) {
 	int status = 0;
 
@@ -1051,8 +1096,8 @@ int getNumberOfNotes (xmlNode* node) {
 void readPatchFromFile (const char *file) {
 
     xmlDoc *doc = NULL;
-    xmlNode *root_element, *bank_element, *bank_content, *sequence_element, *step_element, *chord_element, *note_element, *cur = NULL;
-    int bank_index, chord_index, sequence_index, step_index, note_index, number_of_notes, number_of_steps, bank_midi_channel, note_midi_channel;
+    xmlNode *root_element, *bank_element, *bank_content, *sequence_element, *step_element, *chord_element, *note_element, *message_element, *cur = NULL;
+    int bank_index, chord_index, sequence_index, step_index, note_index, number_of_notes, number_of_steps, bank_midi_channel, note_midi_channel, message_index, number_of_messages;
 
     /*
      * this initialize the library and check potential ABI mismatches
@@ -1078,116 +1123,159 @@ void readPatchFromFile (const char *file) {
         printf("midi channel: %d\n", midi.channel);
         cur = cur->children;
 
-        while (cur->type != XML_ELEMENT_NODE) { 
-            cur = cur->next;
-        }
-        if (!strcmp(cur->name, "banks")) {
-            printf("%s\n", cur->name);
-            bank_element = cur->children;
-            bank_index = 0;
+        while (cur != NULL) {
+        	if (cur->type == XML_ELEMENT_NODE) { 
 
-            while (bank_element != NULL) {
-                if (bank_element->type == XML_ELEMENT_NODE) {
-                    printf("bank %d %s\n", bank_index, xmlGetProp(bank_element, "name"));
-                    readMidiInfo(bank_element, &(bank[bank_index].midi));
+                if (!strcmp(cur->name, "cc")) {
+                	
+            	    if (xmlGetProp(cur, "number_of_messages")) {
+				        sscanf(xmlGetProp(cur, "number_of_messages"), "%d", &number_of_messages);
+				        cc_length = number_of_messages;
+				    }
+				    message_element = cur->children;
+				    message_index = 0;
+                   	cc = malloc(cc_length * sizeof(struct cc_message_t));
 
-                    bank_content = bank_element->children;
+                   	while (message_element != NULL && message_index < cc_length) {
+                   		if (message_element->type == XML_ELEMENT_NODE) {
+                       		readCCMessage(message_element, &(cc[message_index]));
+                       		message_index++;
+                       }
+                       message_element = message_element->next;
+                   	}
+                   	
+                }		        	
 
-                    while (bank_content != NULL) {
-                        if (bank_content->type == XML_ELEMENT_NODE) {
-                            printf("%s\n", bank_content->name);
+		        if (!strcmp(cur->name, "banks")) {
+		            printf("%s\n", cur->name);
+		            bank_element = cur->children;
+		            bank_index = 0;
 
-                            if (!strcmp(bank_content->name, "chords")) {
-                                chord_element = bank_content->children;
+		            while (bank_element != NULL) {
+		                if (bank_element->type == XML_ELEMENT_NODE) {
+		                    printf("bank %d %s\n", bank_index, xmlGetProp(bank_element, "name"));
+		                    readMidiInfo(bank_element, &(bank[bank_index].midi));
 
-                                while (chord_element != NULL) {
-                                    if (chord_element->type == XML_ELEMENT_NODE) {
-                                        chord_index = 0;
-                                        number_of_notes = getNumberOfNotes(chord_element);
-                                        chord_index = getFretStatus(chord_element);
+		                    bank_content = bank_element->children;
 
-                                        printf("\n");
+		                    while (bank_content != NULL) {
+		                        if (bank_content->type == XML_ELEMENT_NODE) {
+		                            printf("%s\n", bank_content->name);
 
-                                        bank[bank_index].chord[chord_index].size = number_of_notes;
-                                        bank[bank_index].chord[chord_index].note = malloc(bank[bank_index].chord[chord_index].size * sizeof(struct note_t));
+		                            if (!strcmp(bank_content->name, "cc")) {
+		                            	
+	                            	    if (xmlGetProp(bank_content, "number_of_messages")) {
+									        sscanf(xmlGetProp(bank_content, "number_of_messages"), "%d", &number_of_messages);
+									        bank[bank_index].cc_length = number_of_messages;
+									    }
+									    message_element = bank_content->children;
+									    message_index = 0;
+			                           	bank[bank_index].cc = malloc(bank[bank_index].cc_length * sizeof(struct cc_message_t));
 
-                                        note_element = chord_element->children;
-                                        note_index = 0;
-                                        while (note_element != NULL && note_index < number_of_notes) {
-                                            if (note_element->type == XML_ELEMENT_NODE) {
-												readNote(note_element, &(bank[bank_index].chord[chord_index].note[note_index]));
-                                                note_index++;
-                                            }
-                                            note_element = note_element->next;
-                                        }
-                                    }
-                                    chord_element = chord_element->next;
-                                }
-                            }
+			                           	while (message_element != NULL && message_index < bank[bank_index].cc_length) {
+			                           		if (message_element->type == XML_ELEMENT_NODE) {
+				                           		readCCMessage(message_element, &(bank[bank_index].cc[message_index]));
+				                           		message_index++;
+				                           }
+				                           message_element = message_element->next;
+			                           	}
+			                           	
+		                            }
 
-                            if (!strcmp(bank_content->name, "sequences")) {
-                                sequence_element = bank_content->children;
+		                            if (!strcmp(bank_content->name, "chords")) {
+		                                chord_element = bank_content->children;
 
-                                while (sequence_element != NULL) {
-                                    if (sequence_element->type == XML_ELEMENT_NODE) {
-                                        sequence_index = 0;
-                                        number_of_steps = 0;
-                                        sequence_index = getFretStatus(sequence_element);
+		                                while (chord_element != NULL) {
+		                                    if (chord_element->type == XML_ELEMENT_NODE) {
+		                                        chord_index = 0;
+		                                        number_of_notes = getNumberOfNotes(chord_element);
+		                                        chord_index = getFretStatus(chord_element);
 
-                                        if (xmlGetProp(sequence_element, "number_of_steps")) {
-                                            sscanf(xmlGetProp(sequence_element, "number_of_steps"), "%d", &number_of_steps);
-                                        }
+		                                        printf("\n");
 
-                                        bank[bank_index].sequence[sequence_index].keep_position = 0;
-                                        if (xmlGetProp(sequence_element, "keep_position")) {
-											bank[bank_index].sequence[sequence_index].keep_position = 1;
-                                        }
+		                                        bank[bank_index].chord[chord_index].size = number_of_notes;
+		                                        bank[bank_index].chord[chord_index].note = malloc(bank[bank_index].chord[chord_index].size * sizeof(struct note_t));
 
-                                        printf("\n");
-                                        bank[bank_index].sequence[sequence_index].length = number_of_steps;
-                                        bank[bank_index].sequence[sequence_index].step = malloc(number_of_steps * sizeof(struct chord_t));
-                                        bank[bank_index].sequence[sequence_index].position = 0;
-                                        
-
-                                        step_element = sequence_element->children;
-                                        step_index = 0;
-                                        while (step_element != NULL && step_index < number_of_steps) {
-                                            if (step_element->type == XML_ELEMENT_NODE) {
-                                            	printf("step %d\n", step_index);
-                                            	note_element = step_element->children;
-                                            	number_of_notes = getNumberOfNotes(step_element);
-
-
-		                                        bank[bank_index].sequence[sequence_index].step[step_index].size = number_of_notes;
-		                                        bank[bank_index].sequence[sequence_index].step[step_index].note = malloc(number_of_notes * sizeof(struct note_t));
-                 								
-                 								note_element = step_element->children;
+		                                        note_element = chord_element->children;
 		                                        note_index = 0;
 		                                        while (note_element != NULL && note_index < number_of_notes) {
 		                                            if (note_element->type == XML_ELEMENT_NODE) {
-														readNote(note_element, &(bank[bank_index].sequence[sequence_index].step[step_index].note[note_index]));
+														readNote(note_element, &(bank[bank_index].chord[chord_index].note[note_index]));
 		                                                note_index++;
 		                                            }
 		                                            note_element = note_element->next;
-		                                        }		                                        
-                                                step_index++;
-                                            }
-                                            step_element = step_element->next;
-                                        }
-                                    }
-                                    sequence_element = sequence_element->next;
-                                }
-                            }
-                        }
-                        bank_content = bank_content->next;
-                    }
-                    bank[bank_index].selectable = 1;
-                    bank_index += 1;
-                }
-                bank_element = bank_element->next;
-            }
-            printf("\n");
-        }
+		                                        }
+		                                    }
+		                                    chord_element = chord_element->next;
+		                                }
+		                            }
+
+		                            if (!strcmp(bank_content->name, "sequences")) {
+		                                sequence_element = bank_content->children;
+
+		                                while (sequence_element != NULL) {
+		                                    if (sequence_element->type == XML_ELEMENT_NODE) {
+		                                        sequence_index = 0;
+		                                        number_of_steps = 0;
+		                                        sequence_index = getFretStatus(sequence_element);
+
+		                                        if (xmlGetProp(sequence_element, "number_of_steps")) {
+		                                            sscanf(xmlGetProp(sequence_element, "number_of_steps"), "%d", &number_of_steps);
+		                                        }
+
+		                                        bank[bank_index].sequence[sequence_index].keep_position = 0;
+		                                        if (xmlGetProp(sequence_element, "keep_position")) {
+													bank[bank_index].sequence[sequence_index].keep_position = 1;
+		                                        }
+
+		                                        printf("\n");
+		                                        bank[bank_index].sequence[sequence_index].length = number_of_steps;
+		                                        bank[bank_index].sequence[sequence_index].step = malloc(number_of_steps * sizeof(struct chord_t));
+		                                        bank[bank_index].sequence[sequence_index].position = 0;
+		                                        
+
+		                                        step_element = sequence_element->children;
+		                                        step_index = 0;
+		                                        while (step_element != NULL && step_index < number_of_steps) {
+		                                            if (step_element->type == XML_ELEMENT_NODE) {
+		                                            	printf("step %d\n", step_index);
+		                                            	note_element = step_element->children;
+		                                            	number_of_notes = getNumberOfNotes(step_element);
+
+
+				                                        bank[bank_index].sequence[sequence_index].step[step_index].size = number_of_notes;
+				                                        bank[bank_index].sequence[sequence_index].step[step_index].note = malloc(number_of_notes * sizeof(struct note_t));
+		                 								
+		                 								note_element = step_element->children;
+				                                        note_index = 0;
+				                                        while (note_element != NULL && note_index < number_of_notes) {
+				                                            if (note_element->type == XML_ELEMENT_NODE) {
+																readNote(note_element, &(bank[bank_index].sequence[sequence_index].step[step_index].note[note_index]));
+				                                                note_index++;
+				                                            }
+				                                            note_element = note_element->next;
+				                                        }		                                        
+		                                                step_index++;
+		                                            }
+		                                            step_element = step_element->next;
+		                                        }
+		                                    }
+		                                    sequence_element = sequence_element->next;
+		                                }
+		                            }
+		                        }
+		                        bank_content = bank_content->next;
+		                    }
+		                    bank[bank_index].selectable = 1;
+		                    bank_index += 1;
+		                }
+		                bank_element = bank_element->next;
+		            }
+		            printf("\n");
+		        }
+		    }
+		    cur = cur->next;
+		}
     }
 
     /*free the document */
@@ -1381,9 +1469,6 @@ int main(int argc, char *argv[]) {
         }
     }
     free(ports);
-
-    printf("kaci");
-
 
     system("stty -echo");
     signal(SIGINT, siginthandler);

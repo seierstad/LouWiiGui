@@ -227,6 +227,12 @@ struct sequence_t {
 	unsigned char position;
 };
 
+struct cc_message_t {
+	int channel;
+	int parameter;
+	int value;
+};
+
 struct midi_info_t {
 	int channel;
 	int bank_msb;
@@ -240,6 +246,8 @@ struct bank_t {
 	struct midi_info_t midi;
 	struct chord_t chord[ALL_COLOR_COMBINATIONS];
 	struct sequence_t sequence[ALL_COLOR_COMBINATIONS];
+	int cc_length;
+	struct cc_message_t *cc;
 };
 
 #define MAX_BANKS_COUNT 3
@@ -277,6 +285,8 @@ struct itimerspec time_left;
 cwiid_wiimote_t *wiimote;	/* wiimote handle */
 cwiid_mesg_callback_t cwiid_callback;
 
+int cc_length;
+struct cc_message_t *cc;
 struct midi_info_t midi;
 int8_t transpose;
 int8_t selected_bank;

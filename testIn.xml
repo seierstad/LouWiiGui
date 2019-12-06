@@ -1,7 +1,15 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
 <patch name="test patch" midi_channel="1" midi_program="3">
+	<cc number_of_messages="3">
+		<message parameter="7" value="48" />
+		<message midi_channel="2" parameter="7" value="46" />
+		<message midi_channel="3" parameter="7" value="44" />
+	</cc>
 	<banks>
 		<bank name="intro" midi_channel="1" midi_program="2">
+			<cc number_of_messages="1">
+				<message parameter="7" value="10" />
+			</cc>
 			<chords>
 				<chord number_of_notes="3">
 					<note note_number="55" velocity="100" />
@@ -184,6 +192,9 @@
 			</chords>
 		</bank>
 		<bank name="chorus" midi_program="10">
+			<cc number_of_messages="1">
+				<message parameter="80" value="2" />
+			</cc>
 			<chords>
 				<chord number_of_notes="2" name="single note E">
 					<note note_number="28" velocity="100" midi_channel="3" />
