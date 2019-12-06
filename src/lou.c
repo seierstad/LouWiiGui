@@ -509,6 +509,54 @@ void mute(void *port_buf, int i) {
     }
 }
 
+void sendWhammyMessages (int whammy_length, struct scaled_message_t *whammy, void *port_buf, jack_nframes_t time) {
+    unsigned char *buffer;
+    int use_midi_channel = USE_MIDI_CHANNEL;
+    int range;
+    int shift;
+    unsigned int value;
+    int midi_channel;
+
+    for (int i = 0; i < whammy_length; i++) {
+		range = whammy[i].max - whammy[i].min;
+	    shift = (range * whammy_state) / CWIID_GUITAR_WHAMMY_MAX ;
+	    value = whammy[i].min + shift;
+	    midi_channel = whammy[i].midi_channel == MIDI_DATA_NULL ? use_midi_channel : whammy[i].midi_channel;
+
+
+    	switch (whammy[i].type) {
+    		case SCALED_PITCH:
+		    	buffer = jack_midi_event_reserve(port_buf, time, 3);
+			    buffer[2] = (value & 0x3F80) >> 7;  // most significant bits
+			    buffer[1] = value & 0x007f;         // least significant bits
+			    buffer[0] = MIDI_PITCH_WHEEL + midi_channel - 1;    // pitch wheel change 
+		    	printf("whammy pitch: %x, %x, %x, min: %d\tvalue: %d\tmax: %d\twhammy-state: %x\n", buffer[0], buffer[2], buffer[1], whammy[i].min, value, whammy[i].max, whammy_state);
+
+		    	break;
+
+		    case SCALED_CC:
+		    	printf("whammy cc\n");
+		    	if (whammy[i].cc_lsb) {
+			    	buffer = jack_midi_event_reserve(port_buf, time, 3);
+				    buffer[2] = (value & 0x3F80) >> 7;  // most significant bits
+				    buffer[1] = whammy[i].cc;         
+				    buffer[0] = MIDI_CONTROL_CHANGE + midi_channel - 1;   
+
+			    	buffer = jack_midi_event_reserve(port_buf, time, 3);
+				    buffer[2] = (value & 0x007F);  // least significant bits
+				    buffer[1] = whammy[i].cc_lsb;         
+				    buffer[0] = MIDI_CONTROL_CHANGE + midi_channel - 1;   
+		    	} else {
+			    	buffer = jack_midi_event_reserve(port_buf, time, 3);
+				    buffer[2] = value;
+				    buffer[1] = whammy[i].cc;         
+				    buffer[0] = MIDI_CONTROL_CHANGE + midi_channel - 1;   
+		    	}
+		    	break;
+    	}
+    }
+}
+
 void mute_string_notes (void *port_buf, int i) {
 	unsigned char* buffer;
 	int j;
@@ -587,17 +635,16 @@ int process(jack_nframes_t nframes, void *arg) {
                 }
             }
         }
+
         if (whammy_action != WHAMMY_ACTION_NONE) {
-            buffer = jack_midi_event_reserve(port_buf, i, 3);
-            unsigned int pitch_shift = (MIDI_PITCH_CENTER * whammy_state) / CWIID_GUITAR_WHAMMY_MAX ;
-            unsigned int pitch_value = MIDI_PITCH_CENTER - pitch_shift;
-            buffer[2] = (pitch_value & 0x3F80) >> 7;  // most significant bits
-            buffer[1] = pitch_value & 0x007f;         // least significant bits
-            buffer[0] = MIDI_PITCH_WHEEL + use_midi_channel - 1;    // pitch wheel change 
-            printf("whammy! %x, %x, %x, desimalt: %d", buffer[0], buffer[2], buffer[1], pitch_value);
+        	if (bank[selected_bank].whammy_length > 0) {
+        		sendWhammyMessages(bank[selected_bank].whammy_length, bank[selected_bank].whammy, port_buf, i);
+        	} else if (whammy_length > 0) {
+        		sendWhammyMessages(whammy_length, whammy, port_buf, i);
+        	}
             whammy_action = WHAMMY_ACTION_NONE;
-            printf("\n");
         }
+
         if (touchbar_action != TOUCHBAR_ACTION_NONE) {
             buffer = jack_midi_event_reserve(port_buf, i, 3);
 
@@ -1057,6 +1104,45 @@ void readCCMessage (xmlNode *node, struct cc_message_t *cc) {
 	printf("cc (lest):\tv: %d\tp: %d\t c: %d\n", (*cc).parameter, (*cc).value, (*cc).channel);
 }
 
+void readScaledMessage (xmlNode *node, struct scaled_message_t *sm) {
+
+	char typeString[5] = "";
+
+    if (xmlGetProp(node, "type")) {
+		sscanf(xmlGetProp(node, "type"), "%s", typeString);
+	}
+
+	if (!strcmp(typeString, "pitch")) {
+		(*sm).type = SCALED_PITCH;
+	} else if (!strcmp(typeString, "cc")) {
+		(*sm).type = SCALED_CC;
+
+	    if (xmlGetProp(node, "cc")) {
+			sscanf(xmlGetProp(node, "cc"), "%d", &(*sm).cc);
+		} else {
+			fprintf(stderr, "ERROR: scaled message of type cc has no cc attribute");
+		}
+		if (xmlGetProp(node, "cc_lsb")) {
+			sscanf(xmlGetProp(node, "cc_lsb"), "%d", &(*sm).cc_lsb);
+		}
+	}
+
+    if (xmlGetProp(node, "min")) {
+		sscanf(xmlGetProp(node, "min"), "%d", &(*sm).min);
+	}
+    if (xmlGetProp(node, "max")) {
+		sscanf(xmlGetProp(node, "max"), "%d", &(*sm).max);
+	}
+
+    if (xmlGetProp(node, "midi_channel")) {
+		sscanf(xmlGetProp(node, "midi_channel"), "%d", &(*sm).midi_channel);
+	} else {
+		(*sm).midi_channel = MIDI_DATA_NULL;
+	}
+
+	printf("Scaled Message read: %s\tmin: %d\tmax: %d\tcc: %d\tcc_lsb: %d\n", typeString, sm->min, sm->max, sm->cc, sm->cc_lsb);
+}
+
 int getFretStatus (xmlNode* node) {
 	int status = 0;
 
@@ -1096,7 +1182,7 @@ int getNumberOfNotes (xmlNode* node) {
 void readPatchFromFile (const char *file) {
 
     xmlDoc *doc = NULL;
-    xmlNode *root_element, *bank_element, *bank_content, *sequence_element, *step_element, *chord_element, *note_element, *message_element, *cur = NULL;
+    xmlNode *root_element, *bank_element, *bank_content, *sequence_element, *step_element, *chord_element, *note_element, *message_element, *scaled_message_element, *cur = NULL;
     int bank_index, chord_index, sequence_index, step_index, note_index, number_of_notes, number_of_steps, bank_midi_channel, note_midi_channel, message_index, number_of_messages;
 
     /*
@@ -1146,6 +1232,25 @@ void readPatchFromFile (const char *file) {
                    	
                 }		        	
 
+                if (!strcmp(cur->name, "whammy")) {
+            	    if (xmlGetProp(cur, "number_of_messages")) {
+				        sscanf(xmlGetProp(cur, "number_of_messages"), "%d", &number_of_messages);
+				        whammy_length = number_of_messages;
+				    }
+				    message_element = cur->children;
+				    message_index = 0;
+			    	whammy = malloc(whammy_length * sizeof(struct scaled_message_t));
+
+                   	while (message_element != NULL && message_index < whammy_length) {
+                   		if (message_element->type == XML_ELEMENT_NODE) {
+                       		readScaledMessage(message_element, &(whammy[message_index]));
+                       		message_index++;
+                       }
+                       message_element = message_element->next;
+                   	}
+
+                }
+
 		        if (!strcmp(cur->name, "banks")) {
 		            printf("%s\n", cur->name);
 		            bank_element = cur->children;
@@ -1181,6 +1286,25 @@ void readPatchFromFile (const char *file) {
 			                           	}
 			                           	
 		                            }
+
+					                if (!strcmp(bank_content->name, "whammy")) {
+					            	    if (xmlGetProp(bank_content, "number_of_messages")) {
+									        sscanf(xmlGetProp(bank_content, "number_of_messages"), "%d", &number_of_messages);
+									        bank[bank_index].whammy_length = number_of_messages;
+									    }
+									    message_element = bank_content->children;
+									    message_index = 0;
+								    	bank[bank_index].whammy = malloc(whammy_length * sizeof(struct scaled_message_t));
+
+					                   	while (message_element != NULL && message_index < whammy_length) {
+					                   		if (message_element->type == XML_ELEMENT_NODE) {
+					                       		readScaledMessage(message_element, &(bank[bank_index].whammy[message_index]));
+					                       		message_index++;
+					                       }
+					                       message_element = message_element->next;
+					                   	}
+
+					                }
 
 		                            if (!strcmp(bank_content->name, "chords")) {
 		                                chord_element = bank_content->children;

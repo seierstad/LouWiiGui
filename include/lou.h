@@ -166,6 +166,11 @@ enum buttons_action_t {
 	BUTTONS_ACTION_BANK_CHANGE
 } buttons_actions;
 
+enum scaled_value_type_t {
+	SCALED_CC,
+	SCALED_PITCH
+} scaled_value_type;
+
 
 struct effect_dial_state_t {
 	int8_t change;
@@ -240,6 +245,15 @@ struct midi_info_t {
 	int program;
 };
 
+struct scaled_message_t {
+	char type;
+	int min;
+	int max;
+	int cc;
+	int cc_lsb;
+	int midi_channel;
+};
+
 // a bank is a collection of chords and sequences
 struct bank_t {
 	char selectable;
@@ -248,6 +262,8 @@ struct bank_t {
 	struct sequence_t sequence[ALL_COLOR_COMBINATIONS];
 	int cc_length;
 	struct cc_message_t *cc;
+	int whammy_length;
+	struct scaled_message_t *whammy;
 };
 
 #define MAX_BANKS_COUNT 3
@@ -290,6 +306,9 @@ struct cc_message_t *cc;
 struct midi_info_t midi;
 int8_t transpose;
 int8_t selected_bank;
+
+int whammy_length;
+struct scaled_message_t *whammy;
 
 // initial attempt to implement delay:
 #define DELAYED_NOTE_TRIGGERED 13

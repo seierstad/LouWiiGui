@@ -5,6 +5,12 @@
 		<message midi_channel="2" parameter="7" value="46" />
 		<message midi_channel="3" parameter="7" value="44" />
 	</cc>
+	<whammy number_of_messages="3">
+		<scaled_message type="pitch" min="8192" max="0" />
+		<scaled_message type="pitch" min="8192" max="0" midi_channel="3" />
+		<scaled_message type="cc"    min="127"  max="0" cc="74" />
+		<scaled_message type="cc"    min="0"    max="16384" cc="1" cc_lsb="33" />
+	</whammy>
 	<banks>
 		<bank name="intro" midi_channel="1" midi_program="2">
 			<cc number_of_messages="1">
@@ -111,7 +117,6 @@
 					<note note_number="54" velocity="110" delay="17" />
 		      		<note note_number="59" velocity="110" delay="22" />
 				</chord>
-				
 				<chord red="true" number_of_notes="1" name="single note A">
 					<note note_number="45" velocity="127" />
 				</chord>
@@ -192,8 +197,9 @@
 			</chords>
 		</bank>
 		<bank name="chorus" midi_program="10">
-			<cc number_of_messages="1">
+			<cc number_of_messages="2">
 				<message parameter="80" value="2" />
+				<message parameter="71" value="110" />
 			</cc>
 			<chords>
 				<chord number_of_notes="2" name="single note E">
