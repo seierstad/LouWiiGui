@@ -254,6 +254,11 @@ struct scaled_message_t {
 	int midi_channel;
 };
 
+struct counter_t {
+	int length;
+	int position;
+};
+
 // a bank is a collection of chords and sequences
 struct bank_t {
 	char selectable;
@@ -264,6 +269,8 @@ struct bank_t {
 	struct cc_message_t *cc;
 	int whammy_length;
 	struct scaled_message_t *whammy;
+	int number_of_counters;
+	struct counter_t *counters;
 };
 
 #define MAX_BANKS_COUNT 3

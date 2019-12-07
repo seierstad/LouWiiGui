@@ -98,7 +98,7 @@ void sendBankProgramChange(int bank_msb, int bank_lsb, int program, void *port_b
 
 void sendCCMessage(struct cc_message_t cc, void *port_buf, jack_nframes_t time) {
 	int use_midi_channel = (cc.channel != MIDI_DATA_NULL) ? cc.channel : USE_MIDI_CHANNEL;
-    printf("sender CC\tverdi: %d,\tparameter: %d,\tkanal: %d\n", cc.value, cc.parameter, use_midi_channel);
+    printf("sending CC\tparameter: %d\t,value: %d,\tchannel: %d\n", cc.parameter, cc.value, use_midi_channel);
 	unsigned char *buffer = jack_midi_event_reserve(port_buf, time, 3);
 
 	buffer[2] = cc.value;
@@ -119,7 +119,6 @@ void selectBank (unsigned char bank_number, void *port_buf, jack_nframes_t time)
             sendBankProgramChange(midi.bank_msb, midi.bank_lsb, midi.program, port_buf, time); 
         }
 
-    	fprintf(stderr, "selectBank kaller \t\t\t-----------------%d\n", bank[selected_bank].cc_length);
         if (bank[selected_bank].cc_length > 0) {
         	for (int j = 0; j < bank[selected_bank].cc_length; j++) {
         		sendCCMessage(bank[selected_bank].cc[j], port_buf, time);
@@ -359,7 +358,7 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
                 printf("\n");
                 break;
             case CWIID_MESG_TURNTABLES:
-                printf("platespillerbeskjed\n");
+                printf("decks message:\n");
                 printf("stick x: %x,\ty: %x\n", mesg[i].turntables_mesg.stick[CWIID_X], mesg[i].turntables_mesg.stick[CWIID_Y]);
                 printf("left: %d,\tright: %d\n", mesg[i].turntables_mesg.left_turntable, mesg[i].turntables_mesg.right_turntable);
                 printf("X-fader: %d, effect: %d\n", mesg[i].turntables_mesg.crossfader, mesg[i].turntables_mesg.effect_dial);
@@ -535,8 +534,7 @@ void sendWhammyMessages (int whammy_length, struct scaled_message_t *whammy, voi
 		    	break;
 
 		    case SCALED_CC:
-		    	printf("whammy cc\n");
-		    	if (whammy[i].cc_lsb) {
+		    	if (whammy[i].cc_lsb && whammy[i].cc_lsb != MIDI_DATA_NULL) {
 			    	buffer = jack_midi_event_reserve(port_buf, time, 3);
 				    buffer[2] = (value & 0x3F80) >> 7;  // most significant bits
 				    buffer[1] = whammy[i].cc;         
@@ -546,11 +544,13 @@ void sendWhammyMessages (int whammy_length, struct scaled_message_t *whammy, voi
 				    buffer[2] = (value & 0x007F);  // least significant bits
 				    buffer[1] = whammy[i].cc_lsb;         
 				    buffer[0] = MIDI_CONTROL_CHANGE + midi_channel - 1;   
+		    		printf("whammy cc:\tmsb (%d): %d\tlsb (%d): %d\n", whammy[i].cc, (value & 0x3F80) >> 7, whammy[i].cc_lsb, (value & 0x007F));
 		    	} else {
 			    	buffer = jack_midi_event_reserve(port_buf, time, 3);
 				    buffer[2] = value;
 				    buffer[1] = whammy[i].cc;         
-				    buffer[0] = MIDI_CONTROL_CHANGE + midi_channel - 1;   
+				    buffer[0] = MIDI_CONTROL_CHANGE + midi_channel - 1;
+				    printf("whammy cc (%d): %d\n", whammy[i].cc, value);
 		    	}
 		    	break;
     	}
@@ -1088,22 +1088,6 @@ void readMidiInfo (xmlNode *node, struct midi_info_t *midiData) {
     }
 }
 
-void readCCMessage (xmlNode *node, struct cc_message_t *cc) {
-
-    if (xmlGetProp(node, "midi_channel")) {
-		sscanf(xmlGetProp(node, "midi_channel"), "%d", &(*cc).channel);
-	} else {
-		(*cc).channel = MIDI_DATA_NULL;
-	}
-    if (xmlGetProp(node, "parameter")) {
-		sscanf(xmlGetProp(node, "parameter"), "%d", &(*cc).parameter);
-	}
-    if (xmlGetProp(node, "value")) {
-		sscanf(xmlGetProp(node, "value"), "%d", &(*cc).value);
-	}
-	printf("cc (lest):\tv: %d\tp: %d\t c: %d\n", (*cc).parameter, (*cc).value, (*cc).channel);
-}
-
 void readScaledMessage (xmlNode *node, struct scaled_message_t *sm) {
 
 	char typeString[5] = "";
@@ -1116,15 +1100,16 @@ void readScaledMessage (xmlNode *node, struct scaled_message_t *sm) {
 		(*sm).type = SCALED_PITCH;
 	} else if (!strcmp(typeString, "cc")) {
 		(*sm).type = SCALED_CC;
-
-	    if (xmlGetProp(node, "cc")) {
-			sscanf(xmlGetProp(node, "cc"), "%d", &(*sm).cc);
-		} else {
-			fprintf(stderr, "ERROR: scaled message of type cc has no cc attribute");
-		}
-		if (xmlGetProp(node, "cc_lsb")) {
-			sscanf(xmlGetProp(node, "cc_lsb"), "%d", &(*sm).cc_lsb);
-		}
+	}
+    if (xmlGetProp(node, "cc")) {
+		sscanf(xmlGetProp(node, "cc"), "%d", &(*sm).cc);
+	} else {
+		sm->cc = MIDI_DATA_NULL;
+	}
+	if (xmlGetProp(node, "cc_lsb")) {
+		sscanf(xmlGetProp(node, "cc_lsb"), "%d", &(*sm).cc_lsb);
+	} else {
+		sm->cc_lsb = MIDI_DATA_NULL;	
 	}
 
     if (xmlGetProp(node, "min")) {
@@ -1179,10 +1164,177 @@ int getNumberOfNotes (xmlNode* node) {
     return number_of_notes;
 }
 
+
+void readCCMessage (xmlNode *node, struct cc_message_t *cc) {
+
+    if (xmlGetProp(node, "midi_channel")) {
+		sscanf(xmlGetProp(node, "midi_channel"), "%d", &(*cc).channel);
+	} else {
+		(*cc).channel = MIDI_DATA_NULL;
+	}
+    if (xmlGetProp(node, "parameter")) {
+		sscanf(xmlGetProp(node, "parameter"), "%d", &(*cc).parameter);
+	}
+    if (xmlGetProp(node, "value")) {
+		sscanf(xmlGetProp(node, "value"), "%d", &(*cc).value);
+	}
+	printf("cc (read):\tv: %d\tp: %d\t c: %d\n", (*cc).parameter, (*cc).value, (*cc).channel);
+}
+
+struct cc_message_t* readCC (xmlNode* node, int *number_of_messages) {
+	xmlNode* message_element;
+	int message_index;
+	struct cc_message_t* cc;
+
+    if (xmlGetProp(node, "number_of_messages")) {
+        sscanf(xmlGetProp(node, "number_of_messages"), "%d", number_of_messages);
+    }
+    message_element = node->children;
+    message_index = 0;
+   	cc = malloc(*number_of_messages * sizeof(struct cc_message_t));
+
+   	while (message_element != NULL && message_index < *number_of_messages) {
+   		if (message_element->type == XML_ELEMENT_NODE) {
+       		readCCMessage(message_element, &(cc[message_index]));
+       		message_index++;
+       }
+       message_element = message_element->next;
+   	}
+   	return cc;
+}
+
+
+struct scaled_message_t* readWhammy (xmlNode *whammyNode, int *number_of_messages) {
+	xmlNode *message_element;
+	int message_index;
+	struct scaled_message_t* whammy;
+
+    if (xmlGetProp(whammyNode, "number_of_messages")) {
+        sscanf(xmlGetProp(whammyNode, "number_of_messages"), "%d", number_of_messages);
+    }
+    message_element = whammyNode->children;
+    message_index = 0;
+	whammy = malloc(*number_of_messages * sizeof(struct scaled_message_t));
+
+   	while (message_element != NULL && message_index < *number_of_messages) {
+   		if (message_element->type == XML_ELEMENT_NODE && message_index < *number_of_messages) {
+       		readScaledMessage(message_element, &(whammy[message_index]));
+       		message_index++;
+       }
+       message_element = message_element->next;
+   	}
+
+   	return whammy;
+}
+
+struct counter_t* readCounters (xmlNode *countersNode, int *number_of_counters) {
+	int counter_index;
+	xmlNode *counterNode;
+
+	if (xmlGetProp(countersNode, "number_of_counters")) {
+		sscanf(xmlGetProp(countersNode, "number_of_counters"), "%d", number_of_counters);
+	}
+	counterNode = countersNode->children;
+	counter_index = 0;
+	struct counter_t* counters = malloc(*number_of_counters * sizeof(struct counter_t));
+
+	while (counterNode != NULL && counter_index < *number_of_counters) {
+		if (counterNode->type == XML_ELEMENT_NODE && counter_index < *number_of_counters) {
+			if (xmlGetProp(counterNode, "length")) {
+				sscanf(xmlGetProp(counterNode, "length"), "%d", &counters[counter_index].length);
+				printf("counter %d:\tlength: %d\n", counter_index, counters[counter_index].length);
+			}
+			counters[counter_index].position = 0;
+			counter_index++;
+
+		}
+		counterNode = counterNode->next;
+	}
+	return counters;
+}
+
+struct chord_t readChord(xmlNode* chordNode) {
+	struct chord_t	chord;
+	xmlNode *note_element;
+	int note_index = 0;
+
+    if (xmlGetProp(chordNode, "number_of_notes")) {
+        sscanf(xmlGetProp(chordNode, "number_of_notes"), "%d", &(chord.size));
+    }
+    chord.note = malloc(chord.size * sizeof(struct note_t));
+
+    note_element = chordNode->children;
+    while (note_element != NULL && note_index < chord.size) {
+        if (note_element->type == XML_ELEMENT_NODE) {
+			readNote(note_element, &(chord.note[note_index]));
+            note_index++;
+        }
+        note_element = note_element->next;
+    }
+    return chord;
+}
+
+void readChords (xmlNode *node, struct chord_t* chords) {
+	int chord_index;
+    xmlNode *chord_element = node->children;
+
+    while (chord_element != NULL) {
+        if (chord_element->type == XML_ELEMENT_NODE) {
+            chord_index = getFretStatus(chord_element);
+			chords[chord_index] = readChord(chord_element);
+        }
+        chord_element = chord_element->next;
+    }
+}
+
+struct sequence_t readSequence (xmlNode *sequenceNode) {
+	struct sequence_t sequence;
+	xmlNode* step_element;
+    int number_of_steps, step_index = 0;
+
+    if (xmlGetProp(sequenceNode, "number_of_steps")) {
+        sscanf(xmlGetProp(sequenceNode, "number_of_steps"), "%d", &(sequence.length));
+    }
+
+    sequence.keep_position = 0;
+    if (xmlGetProp(sequenceNode, "keep_position")) {
+		sequence.keep_position = 1;
+    }
+    sequence.step = malloc(sequence.length * sizeof(struct chord_t));
+    sequence.position = 0;
+
+    step_element = sequenceNode->children;
+    while (step_element != NULL && step_index < sequence.length) {
+        if (step_element->type == XML_ELEMENT_NODE) {
+        	printf("step %d\n", step_index);
+        	sequence.step[step_index] = readChord(step_element);
+            step_index++;
+        }
+        step_element = step_element->next;
+    }
+
+    return sequence;
+}
+
+void readSequences(xmlNode *node, struct sequence_t * sequences) {
+	xmlNode *sequence_element = node->children;
+	int sequence_index;
+
+    while (sequence_element != NULL) {
+        if (sequence_element->type == XML_ELEMENT_NODE && !strcmp(sequence_element->name, "sequence")) {
+            sequence_index = getFretStatus(sequence_element);
+            sequences[sequence_index] = readSequence(sequence_element);
+        }
+        sequence_element = sequence_element->next;
+    }
+
+}
+
+
 void readPatchFromFile (const char *file) {
 
     xmlDoc *doc = NULL;
-    xmlNode *root_element, *bank_element, *bank_content, *sequence_element, *step_element, *chord_element, *note_element, *message_element, *scaled_message_element, *cur = NULL;
+    xmlNode *root_element, *bank_element, *bank_content, *sequence_element, *step_element, *counters_element, *chord_element, *note_element, *message_element, *scaled_message_element, *cur = NULL;
     int bank_index, chord_index, sequence_index, step_index, note_index, number_of_notes, number_of_steps, bank_midi_channel, note_midi_channel, message_index, number_of_messages;
 
     /*
@@ -1211,44 +1363,12 @@ void readPatchFromFile (const char *file) {
 
         while (cur != NULL) {
         	if (cur->type == XML_ELEMENT_NODE) { 
-
                 if (!strcmp(cur->name, "cc")) {
-                	
-            	    if (xmlGetProp(cur, "number_of_messages")) {
-				        sscanf(xmlGetProp(cur, "number_of_messages"), "%d", &number_of_messages);
-				        cc_length = number_of_messages;
-				    }
-				    message_element = cur->children;
-				    message_index = 0;
-                   	cc = malloc(cc_length * sizeof(struct cc_message_t));
-
-                   	while (message_element != NULL && message_index < cc_length) {
-                   		if (message_element->type == XML_ELEMENT_NODE) {
-                       		readCCMessage(message_element, &(cc[message_index]));
-                       		message_index++;
-                       }
-                       message_element = message_element->next;
-                   	}
-                   	
+                	cc = readCC(cur, &cc_length);
                 }		        	
 
                 if (!strcmp(cur->name, "whammy")) {
-            	    if (xmlGetProp(cur, "number_of_messages")) {
-				        sscanf(xmlGetProp(cur, "number_of_messages"), "%d", &number_of_messages);
-				        whammy_length = number_of_messages;
-				    }
-				    message_element = cur->children;
-				    message_index = 0;
-			    	whammy = malloc(whammy_length * sizeof(struct scaled_message_t));
-
-                   	while (message_element != NULL && message_index < whammy_length) {
-                   		if (message_element->type == XML_ELEMENT_NODE) {
-                       		readScaledMessage(message_element, &(whammy[message_index]));
-                       		message_index++;
-                       }
-                       message_element = message_element->next;
-                   	}
-
+                	whammy = readWhammy(cur, &whammy_length);
                 }
 
 		        if (!strcmp(cur->name, "banks")) {
@@ -1265,127 +1385,20 @@ void readPatchFromFile (const char *file) {
 
 		                    while (bank_content != NULL) {
 		                        if (bank_content->type == XML_ELEMENT_NODE) {
-		                            printf("%s\n", bank_content->name);
-
 		                            if (!strcmp(bank_content->name, "cc")) {
-		                            	
-	                            	    if (xmlGetProp(bank_content, "number_of_messages")) {
-									        sscanf(xmlGetProp(bank_content, "number_of_messages"), "%d", &number_of_messages);
-									        bank[bank_index].cc_length = number_of_messages;
-									    }
-									    message_element = bank_content->children;
-									    message_index = 0;
-			                           	bank[bank_index].cc = malloc(bank[bank_index].cc_length * sizeof(struct cc_message_t));
-
-			                           	while (message_element != NULL && message_index < bank[bank_index].cc_length) {
-			                           		if (message_element->type == XML_ELEMENT_NODE) {
-				                           		readCCMessage(message_element, &(bank[bank_index].cc[message_index]));
-				                           		message_index++;
-				                           }
-				                           message_element = message_element->next;
-			                           	}
-			                           	
+		                            	bank[bank_index].cc = readCC(bank_content, &(bank[bank_index]).cc_length);
 		                            }
-
-					                if (!strcmp(bank_content->name, "whammy")) {
-					            	    if (xmlGetProp(bank_content, "number_of_messages")) {
-									        sscanf(xmlGetProp(bank_content, "number_of_messages"), "%d", &number_of_messages);
-									        bank[bank_index].whammy_length = number_of_messages;
-									    }
-									    message_element = bank_content->children;
-									    message_index = 0;
-								    	bank[bank_index].whammy = malloc(whammy_length * sizeof(struct scaled_message_t));
-
-					                   	while (message_element != NULL && message_index < whammy_length) {
-					                   		if (message_element->type == XML_ELEMENT_NODE) {
-					                       		readScaledMessage(message_element, &(bank[bank_index].whammy[message_index]));
-					                       		message_index++;
-					                       }
-					                       message_element = message_element->next;
-					                   	}
-
+					                if (!strcmp(bank_content->name, "sequence_counters")) {
+					                	bank[bank_index].counters = readCounters(bank_content, &(bank[bank_index]).number_of_counters);
 					                }
-
+					                if (!strcmp(bank_content->name, "whammy")) {
+					                	bank[bank_index].whammy = readWhammy(bank_content, &(bank[bank_index]).whammy_length);
+					                }
 		                            if (!strcmp(bank_content->name, "chords")) {
-		                                chord_element = bank_content->children;
-
-		                                while (chord_element != NULL) {
-		                                    if (chord_element->type == XML_ELEMENT_NODE) {
-		                                        chord_index = 0;
-		                                        number_of_notes = getNumberOfNotes(chord_element);
-		                                        chord_index = getFretStatus(chord_element);
-
-		                                        printf("\n");
-
-		                                        bank[bank_index].chord[chord_index].size = number_of_notes;
-		                                        bank[bank_index].chord[chord_index].note = malloc(bank[bank_index].chord[chord_index].size * sizeof(struct note_t));
-
-		                                        note_element = chord_element->children;
-		                                        note_index = 0;
-		                                        while (note_element != NULL && note_index < number_of_notes) {
-		                                            if (note_element->type == XML_ELEMENT_NODE) {
-														readNote(note_element, &(bank[bank_index].chord[chord_index].note[note_index]));
-		                                                note_index++;
-		                                            }
-		                                            note_element = note_element->next;
-		                                        }
-		                                    }
-		                                    chord_element = chord_element->next;
-		                                }
+		                            	readChords(bank_content, bank[bank_index].chord);
 		                            }
-
-		                            if (!strcmp(bank_content->name, "sequences")) {
-		                                sequence_element = bank_content->children;
-
-		                                while (sequence_element != NULL) {
-		                                    if (sequence_element->type == XML_ELEMENT_NODE) {
-		                                        sequence_index = 0;
-		                                        number_of_steps = 0;
-		                                        sequence_index = getFretStatus(sequence_element);
-
-		                                        if (xmlGetProp(sequence_element, "number_of_steps")) {
-		                                            sscanf(xmlGetProp(sequence_element, "number_of_steps"), "%d", &number_of_steps);
-		                                        }
-
-		                                        bank[bank_index].sequence[sequence_index].keep_position = 0;
-		                                        if (xmlGetProp(sequence_element, "keep_position")) {
-													bank[bank_index].sequence[sequence_index].keep_position = 1;
-		                                        }
-
-		                                        printf("\n");
-		                                        bank[bank_index].sequence[sequence_index].length = number_of_steps;
-		                                        bank[bank_index].sequence[sequence_index].step = malloc(number_of_steps * sizeof(struct chord_t));
-		                                        bank[bank_index].sequence[sequence_index].position = 0;
-		                                        
-
-		                                        step_element = sequence_element->children;
-		                                        step_index = 0;
-		                                        while (step_element != NULL && step_index < number_of_steps) {
-		                                            if (step_element->type == XML_ELEMENT_NODE) {
-		                                            	printf("step %d\n", step_index);
-		                                            	note_element = step_element->children;
-		                                            	number_of_notes = getNumberOfNotes(step_element);
-
-
-				                                        bank[bank_index].sequence[sequence_index].step[step_index].size = number_of_notes;
-				                                        bank[bank_index].sequence[sequence_index].step[step_index].note = malloc(number_of_notes * sizeof(struct note_t));
-		                 								
-		                 								note_element = step_element->children;
-				                                        note_index = 0;
-				                                        while (note_element != NULL && note_index < number_of_notes) {
-				                                            if (note_element->type == XML_ELEMENT_NODE) {
-																readNote(note_element, &(bank[bank_index].sequence[sequence_index].step[step_index].note[note_index]));
-				                                                note_index++;
-				                                            }
-				                                            note_element = note_element->next;
-				                                        }		                                        
-		                                                step_index++;
-		                                            }
-		                                            step_element = step_element->next;
-		                                        }
-		                                    }
-		                                    sequence_element = sequence_element->next;
-		                                }
+    	                            if (!strcmp(bank_content->name, "sequences")) {
+		                            	readSequences(bank_content, bank[bank_index].sequence);
 		                            }
 		                        }
 		                        bank_content = bank_content->next;

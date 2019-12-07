@@ -9,13 +9,17 @@
 		<scaled_message type="pitch" min="8192" max="0" />
 		<scaled_message type="pitch" min="8192" max="0" midi_channel="3" />
 		<scaled_message type="cc"    min="127"  max="0" cc="74" />
-		<scaled_message type="cc"    min="0"    max="16384" cc="1" cc_lsb="33" />
+		<!--scaled_message type="cc"    min="127"  max="16" cc="1" /-->
 	</whammy>
 	<banks>
 		<bank name="intro" midi_channel="1" midi_program="2">
 			<cc number_of_messages="1">
 				<message parameter="7" value="10" />
 			</cc>
+			<sequence_counters number_of_counters="2">
+				<counter length="1" />
+				<counter length="19" />
+			</sequence_counters>
 			<chords>
 				<chord number_of_notes="3">
 					<note note_number="55" velocity="100" />
@@ -189,6 +193,10 @@
 			</chords>
 		</bank>
 		<bank name="verse">
+			<sequence_counters number_of_counters="2">
+				<counter length="2" />
+				<counter length="3" />
+			</sequence_counters>
 			<chords>
 				<chord green="true" number_of_notes="2" name="single note E">
 					<note note_number="28" velocity="100" midi_channel="3" />
@@ -234,6 +242,10 @@
 					<note note_number="87" velocity="127" direction="down" />
 				</chord>
 			</chords>
+			<sequence_counters number_of_counters="2">
+				<counter length="4" />
+				<counter length="9" />
+			</sequence_counters>
 			<sequences>
 				<sequence green="true" orange="true" number_of_steps="3">
 					<chord number_of_notes="1">
