@@ -88,6 +88,8 @@
 		<xsd:attribute name="orange" type="xsd:boolean" use="optional" default="false" />
 		<xsd:attribute name="number_of_steps" type="xsd:positiveInteger" use="required" />
 		<xsd:attribute name="shared_counter" type="xsd:positiveInteger" use="optional" />
+		<xsd:attribute name="reset_shared_counter" type="xsd:boolean" use="optional" />
+		<xsd:attribute name="keep_position" type="xsd:boolean" use="optional" />
 		
 		<xsd:sequence>
 			<xsd:element name="step" type="chordType" maxOccurs="unbounded" />

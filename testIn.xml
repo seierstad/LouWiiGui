@@ -16,10 +16,6 @@
 			<cc number_of_messages="1">
 				<message parameter="7" value="10" />
 			</cc>
-			<sequence_counters number_of_counters="2">
-				<counter length="1" />
-				<counter length="19" />
-			</sequence_counters>
 			<chords>
 				<chord number_of_notes="3">
 					<note note_number="55" velocity="100" />
@@ -194,7 +190,7 @@
 		</bank>
 		<bank name="verse">
 			<sequence_counters number_of_counters="2">
-				<counter length="2" />
+				<counter length="5" />
 				<counter length="3" />
 			</sequence_counters>
 			<chords>
@@ -243,11 +239,11 @@
 				</chord>
 			</chords>
 			<sequence_counters number_of_counters="2">
-				<counter length="4" />
+				<counter length="8" />
 				<counter length="9" />
 			</sequence_counters>
 			<sequences>
-				<sequence green="true" orange="true" number_of_steps="3">
+				<sequence green="true" orange="true" number_of_steps="3" shared_counter="0" reset_shared_counter="true">
 					<chord number_of_notes="1">
 						<note note_number="83" velocity="100" sustain="string" string="1" />
 					</chord>
@@ -258,7 +254,7 @@
 						<note note_number="87" velocity="45" sustain="string" string="3" />
 					</chord>
 				</sequence>
-				<sequence green="true" blue="true" number_of_steps="3">
+				<sequence green="true" blue="true" number_of_steps="3" shared_counter="0" reset_shared_counter="true">
 					<chord number_of_notes="1">
 						<note note_number="81" velocity="100" sustain="string" string="1" />
 					</chord>
@@ -269,7 +265,7 @@
 						<note note_number="86" velocity="45" sustain="string" string="3" />
 					</chord>
 				</sequence>
-				<sequence green="true" red="true" number_of_steps="3">
+				<sequence green="true" red="true" number_of_steps="3" shared_counter="0" reset_shared_counter="true">
 					<chord number_of_notes="1">
 						<note note_number="79" velocity="100" sustain="string" string="1" />
 					</chord>
@@ -280,7 +276,7 @@
 						<note note_number="86" velocity="45" sustain="string" string="3" />
 					</chord>
 				</sequence>
-				<sequence green="true" yellow="true" number_of_steps="8">
+				<sequence green="true" yellow="true" number_of_steps="3" shared_counter="0" reset_shared_counter="true">
 					<chord number_of_notes="1">
 						<note note_number="81" velocity="100" sustain="string" string="1" />
 					</chord>
@@ -289,24 +285,9 @@
 					</chord>
 					<chord number_of_notes="1">
 						<note note_number="85" velocity="45" sustain="string" string="3" />
-					</chord>
-					<chord number_of_notes="1">
-						<note note_number="81" velocity="100" sustain="string" string="1" />
-					</chord>
-					<chord number_of_notes="1">
-						<note note_number="88" velocity="124" sustain="string" string="2" />
-					</chord>
-					<chord number_of_notes="1">
-						<note note_number="85" velocity="45" sustain="string" string="3" />
-					</chord>
-					<chord number_of_notes="1">
-						<note note_number="81" velocity="100" sustain="string" string="1" />
-					</chord>
-					<chord number_of_notes="1">
-						<note note_number="88" velocity="124" sustain="string" string="2" />
 					</chord>
 				</sequence>
-				<sequence green="true" number_of_steps="3">
+				<sequence green="true" number_of_steps="3" shared_counter="0" reset_shared_counter="true">
 					<chord number_of_notes="1">
 						<note note_number="76" velocity="100" sustain="string" string="1" />
 					</chord>

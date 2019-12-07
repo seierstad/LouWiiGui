@@ -230,6 +230,8 @@ struct sequence_t {
 	int length;
 	unsigned char keep_position;
 	unsigned char position;
+	int shared_counter;
+	char reset_shared_counter;
 };
 
 struct cc_message_t {
@@ -270,7 +272,7 @@ struct bank_t {
 	int whammy_length;
 	struct scaled_message_t *whammy;
 	int number_of_counters;
-	struct counter_t *counters;
+	struct counter_t *counter;
 };
 
 #define MAX_BANKS_COUNT 3

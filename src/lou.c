@@ -616,15 +616,27 @@ int process(jack_nframes_t nframes, void *arg) {
             		}
 	                strum_chord(bank[selected_bank].chord[chord_state], strummer_direction, port_buf, i);
 	            } else if (bank[selected_bank].sequence[chord_state].length) {
-	            	if (chord_state != previous_strummed_chord) {
-	            		if (!bank[selected_bank].sequence[chord_state].keep_position) {
-	            			bank[selected_bank].sequence[chord_state].position = 0;
-	            		}
-	            	}
-	            	strum_chord(bank[selected_bank].sequence[chord_state].step[bank[selected_bank].sequence[chord_state].position++], strummer_direction, port_buf, i);
-	            	if (bank[selected_bank].sequence[chord_state].position == bank[selected_bank].sequence[chord_state].length) {
-	            		bank[selected_bank].sequence[chord_state].position = 0;
-	            	}
+	            	if (bank[selected_bank].sequence[chord_state].shared_counter != MIDI_DATA_NULL) {
+		            	if (chord_state != previous_strummed_chord) {
+		            		if (bank[selected_bank].sequence[chord_state].reset_shared_counter) {
+		            			bank[selected_bank].counter[bank[selected_bank].sequence[chord_state].shared_counter].position = 0;
+		            		}
+		            	} 
+		            	strum_chord(bank[selected_bank].sequence[chord_state].step[(bank[selected_bank].counter[bank[selected_bank].sequence[chord_state].shared_counter].position++) % bank[selected_bank].sequence[chord_state].length], strummer_direction, port_buf, i);
+		            	if (bank[selected_bank].counter[bank[selected_bank].sequence[chord_state].shared_counter].position == bank[selected_bank].counter[bank[selected_bank].sequence[chord_state].shared_counter].length) {
+		            		bank[selected_bank].counter[bank[selected_bank].sequence[chord_state].shared_counter].position = 0;
+		            	}
+		            } else {
+		            	if (chord_state != previous_strummed_chord) {
+		            		if (!bank[selected_bank].sequence[chord_state].keep_position) {
+		            			bank[selected_bank].sequence[chord_state].position = 0;
+		            		}
+		            	}
+		            	strum_chord(bank[selected_bank].sequence[chord_state].step[bank[selected_bank].sequence[chord_state].position++], strummer_direction, port_buf, i);
+		            	if (bank[selected_bank].sequence[chord_state].position == bank[selected_bank].sequence[chord_state].length) {
+		            		bank[selected_bank].sequence[chord_state].position = 0;
+		            	}
+		            }
 	            }
                 strummer_action = STRUMMER_ACTION_NONE;
 				previous_strummed_chord = chord_state;
@@ -1130,7 +1142,7 @@ void readScaledMessage (xmlNode *node, struct scaled_message_t *sm) {
 
 int getFretStatus (xmlNode* node) {
 	int status = 0;
-
+	printf("\n");
     if (xmlGetProp(node, "green")) {
         status = status | GREEN;
         printf("GREEN\t");
@@ -1151,19 +1163,9 @@ int getFretStatus (xmlNode* node) {
         status = status | ORANGE;
         printf("ORANGE");
     }
-
+    printf("\n");
     return status;
 }
-
-int getNumberOfNotes (xmlNode* node) {
-	int number_of_notes;
-    if (xmlGetProp(node, "number_of_notes")) {
-        sscanf(xmlGetProp(node, "number_of_notes"), "%d", &number_of_notes);
-    }
-
-    return number_of_notes;
-}
-
 
 void readCCMessage (xmlNode *node, struct cc_message_t *cc) {
 
@@ -1296,6 +1298,18 @@ struct sequence_t readSequence (xmlNode *sequenceNode) {
         sscanf(xmlGetProp(sequenceNode, "number_of_steps"), "%d", &(sequence.length));
     }
 
+    if (xmlGetProp(sequenceNode, "shared_counter")) {
+        sscanf(xmlGetProp(sequenceNode, "shared_counter"), "%d", &(sequence.shared_counter));
+    } else {
+    	sequence.shared_counter = MIDI_DATA_NULL;
+    }
+
+    if (xmlGetProp(sequenceNode, "reset_shared_counter")) {
+    	sequence.reset_shared_counter = 1;
+    } else {
+    	sequence.reset_shared_counter = 0;
+    }
+
     sequence.keep_position = 0;
     if (xmlGetProp(sequenceNode, "keep_position")) {
 		sequence.keep_position = 1;
@@ -1389,7 +1403,7 @@ void readPatchFromFile (const char *file) {
 		                            	bank[bank_index].cc = readCC(bank_content, &(bank[bank_index]).cc_length);
 		                            }
 					                if (!strcmp(bank_content->name, "sequence_counters")) {
-					                	bank[bank_index].counters = readCounters(bank_content, &(bank[bank_index]).number_of_counters);
+					                	bank[bank_index].counter = readCounters(bank_content, &(bank[bank_index]).number_of_counters);
 					                }
 					                if (!strcmp(bank_content->name, "whammy")) {
 					                	bank[bank_index].whammy = readWhammy(bank_content, &(bank[bank_index]).whammy_length);
