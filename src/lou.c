@@ -273,10 +273,10 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
                 //set touch bar state and action
                 unsigned char new_touchbar_state = mesg[i].guitar_mesg.touch_bar;
                 if (new_touchbar_state != state.touchbar) {
-                    if (state.touchbar == TOUCHBAR_UNTOUCHED) {
+                    if (state.touchbar == TOUCHBAR_UNTOUCHED) { // initial touchbar state
                         state.action.touchbar = TOUCHBAR_ACTION_TAP;
                     } 
-                    else if (new_touchbar_state == TOUCHBAR_UNTOUCHED) {
+                    else if (new_touchbar_state == TOUCHBAR_STATE_NONE) {
                         state.action.touchbar = TOUCHBAR_ACTION_RELEASE;
                     }
                     else if (new_touchbar_state < state.touchbar) {
@@ -508,54 +508,108 @@ void mute(void *port_buf, int i) {
     }
 }
 
-void sendWhammyMessages (int whammy_length, struct scaled_message_t *whammy, void *port_buf, jack_nframes_t time) {
+void sendScaledMessages (int messages_length, struct scaled_message_t *messages, struct range_t input_limits, int input_value, void *port_buf, jack_nframes_t time) {
     unsigned char *buffer;
     int use_midi_channel = USE_MIDI_CHANNEL;
-    int range;
+    int output_range;
     int shift;
-    unsigned int value;
+    unsigned int output_value;
     int midi_channel;
+    int input_min;
+    int input_max;
+    int input_range;
 
-    for (int i = 0; i < whammy_length; i++) {
-		range = whammy[i].max - whammy[i].min;
-	    shift = (range * state.whammy) / CWIID_GUITAR_WHAMMY_MAX ;
-	    value = whammy[i].min + shift;
-	    midi_channel = whammy[i].midi_channel == MIDI_DATA_NULL ? use_midi_channel : whammy[i].midi_channel;
+    for (int i = 0; i < messages_length; i++) {
+        input_min = messages[i].in.min != MIDI_DATA_NULL ? messages[i].in.min : input_limits.min;
+        input_max = messages[i].in.max != MIDI_DATA_NULL ? messages[i].in.max : input_limits.max;
+
+        if (input_value >= input_min && input_value <= input_max) {
+
+            input_range = input_max - input_min;
+    		output_range = messages[i].out.max - messages[i].out.min;
+            if (input_range != 0 && output_range != 0) {
+    	       shift = (output_range * (input_value - input_min)) / input_range;
+    	       output_value = messages[i].out.min + shift;
+            } else if (output_range == 0) {
+                output_value = messages[i].out.min;
+            } else {
+                output_value = messages[i].out.min + (output_range / 2);
+            }
+    	    midi_channel = messages[i].midi_channel == MIDI_DATA_NULL ? use_midi_channel : messages[i].midi_channel;
 
 
-    	switch (whammy[i].type) {
-    		case SCALED_PITCH:
-		    	buffer = jack_midi_event_reserve(port_buf, time, 3);
-			    buffer[2] = (value & 0x3F80) >> 7;  // most significant bits
-			    buffer[1] = value & 0x007f;         // least significant bits
-			    buffer[0] = MIDI_PITCH_WHEEL + midi_channel - 1;    // pitch wheel change 
-		    	printf("whammy pitch: %x, %x, %x, min: %d\tvalue: %d\tmax: %d\twhammy-state: %x\n", buffer[0], buffer[2], buffer[1], whammy[i].min, value, whammy[i].max, state.whammy);
+        	switch (messages[i].type) {
+        		case SCALED_PITCH:
+    		    	buffer = jack_midi_event_reserve(port_buf, time, 3);
+    			    buffer[2] = (output_value & 0x3F80) >> 7;  // most significant bits
+    			    buffer[1] = output_value & 0x007f;         // least significant bits
+    			    buffer[0] = MIDI_PITCH_WHEEL + midi_channel - 1;    // pitch wheel change 
+    		    	break;
 
-		    	break;
+    		    case SCALED_CC:
+    		    	if (messages[i].cc_lsb && messages[i].cc_lsb != MIDI_DATA_NULL) {
+    			    	buffer = jack_midi_event_reserve(port_buf, time, 3);
+    				    buffer[2] = (output_value & 0x3F80) >> 7;  // most significant bits
+    				    buffer[1] = messages[i].cc;         
+    				    buffer[0] = MIDI_CONTROL_CHANGE + midi_channel - 1;   
 
-		    case SCALED_CC:
-		    	if (whammy[i].cc_lsb && whammy[i].cc_lsb != MIDI_DATA_NULL) {
-			    	buffer = jack_midi_event_reserve(port_buf, time, 3);
-				    buffer[2] = (value & 0x3F80) >> 7;  // most significant bits
-				    buffer[1] = whammy[i].cc;         
-				    buffer[0] = MIDI_CONTROL_CHANGE + midi_channel - 1;   
-
-			    	buffer = jack_midi_event_reserve(port_buf, time, 3);
-				    buffer[2] = (value & 0x007F);  // least significant bits
-				    buffer[1] = whammy[i].cc_lsb;         
-				    buffer[0] = MIDI_CONTROL_CHANGE + midi_channel - 1;   
-		    		printf("whammy cc:\tmsb (%d): %d\tlsb (%d): %d\n", whammy[i].cc, (value & 0x3F80) >> 7, whammy[i].cc_lsb, (value & 0x007F));
-		    	} else {
-			    	buffer = jack_midi_event_reserve(port_buf, time, 3);
-				    buffer[2] = value;
-				    buffer[1] = whammy[i].cc;         
-				    buffer[0] = MIDI_CONTROL_CHANGE + midi_channel - 1;
-				    printf("whammy cc (%d): %d\n", whammy[i].cc, value);
-		    	}
-		    	break;
-    	}
+    			    	buffer = jack_midi_event_reserve(port_buf, time, 3);
+    				    buffer[2] = (output_value & 0x007F);  // least significant bits
+    				    buffer[1] = messages[i].cc_lsb;         
+    				    buffer[0] = MIDI_CONTROL_CHANGE + midi_channel - 1;   
+    		    	} else {
+    			    	buffer = jack_midi_event_reserve(port_buf, time, 3);
+    				    buffer[2] = output_value;
+    				    buffer[1] = messages[i].cc;         
+    				    buffer[0] = MIDI_CONTROL_CHANGE + midi_channel - 1;
+    		    	}
+    		    	break;
+        	}
+        }
     }
 }
+
+void sendDefaultScaledMessages (int messages_length, struct scaled_message_t *messages, void *port_buf, jack_nframes_t time) {
+    unsigned char *buffer;
+    int use_midi_channel = USE_MIDI_CHANNEL;
+    int midi_channel;
+
+    for (int i = 0; i < messages_length; i++) {
+        if (messages[i].default_value != MIDI_DATA_NULL) {
+            midi_channel = messages[i].midi_channel == MIDI_DATA_NULL ? use_midi_channel : messages[i].midi_channel;
+
+            switch (messages[i].type) {
+                case SCALED_PITCH:
+                    buffer = jack_midi_event_reserve(port_buf, time, 3);
+                    buffer[2] = (messages[i].default_value & 0x3F80) >> 7;  // most significant bits
+                    buffer[1] = messages[i].default_value & 0x007f;         // least significant bits
+                    buffer[0] = MIDI_PITCH_WHEEL + midi_channel - 1;    // pitch wheel change 
+
+                    break;
+
+                case SCALED_CC:
+                    if (messages[i].cc_lsb && messages[i].cc_lsb != MIDI_DATA_NULL) {
+                        buffer = jack_midi_event_reserve(port_buf, time, 3);
+                        buffer[2] = (messages[i].default_value & 0x3F80) >> 7;  // most significant bits
+                        buffer[1] = messages[i].cc;         
+                        buffer[0] = MIDI_CONTROL_CHANGE + midi_channel - 1;   
+
+                        buffer = jack_midi_event_reserve(port_buf, time, 3);
+                        buffer[2] = (messages[i].default_value & 0x007F);  // least significant bits
+                        buffer[1] = messages[i].cc_lsb;         
+                        buffer[0] = MIDI_CONTROL_CHANGE + midi_channel - 1;   
+                    } else {
+                        buffer = jack_midi_event_reserve(port_buf, time, 3);
+                        buffer[2] = messages[i].default_value;
+                        buffer[1] = messages[i].cc;         
+                        buffer[0] = MIDI_CONTROL_CHANGE + midi_channel - 1;
+                    }
+                    break;
+            }
+        }
+    }
+}
+
 
 void mute_string_notes (void *port_buf, int i) {
 	unsigned char* buffer;
@@ -650,26 +704,35 @@ int process(jack_nframes_t nframes, void *arg) {
 
         if (state.action.whammy != WHAMMY_ACTION_NONE) {
         	if (bank[state.selected_bank].whammy_length > 0) {
-        		sendWhammyMessages(bank[state.selected_bank].whammy_length, bank[state.selected_bank].whammy, port_buf, i);
+        		sendScaledMessages(bank[state.selected_bank].whammy_length, bank[state.selected_bank].whammy, whammy_range, state.whammy, port_buf, i);
         	} else if (patch.whammy_length > 0) {
-        		sendWhammyMessages(patch.whammy_length, patch.whammy, port_buf, i);
+        		sendScaledMessages(patch.whammy_length, patch.whammy, whammy_range, state.whammy, port_buf, i);
         	}
             state.action.whammy = WHAMMY_ACTION_NONE;
         }
 
         if (state.action.touchbar != TOUCHBAR_ACTION_NONE) {
-            buffer = jack_midi_event_reserve(port_buf, i, 3);
-
-            // scale input to output values (5th represents maximum possible input value)
-            unsigned int modulation = (MIDI_MODULATION_MAX * state.touchbar) / CWIID_GUITAR_TOUCHBAR_5TH ; 
-            printf("touchbar action! %d, %x, sent %x\n", state.action.touchbar, state.touchbar, modulation);
-            buffer[2] = modulation;
-            buffer[1] = MIDI_CC_MODULATION_MSB;        // modulation
-            buffer[0] = MIDI_CONTROL_CHANGE + use_midi_channel - 1;    // control change 
+            switch (state.action.touchbar) {
+                case TOUCHBAR_ACTION_RELEASE:
+                    printf("touchbar released\n");
+                    if (bank[state.selected_bank].touchbar_length > 0) {
+                        sendDefaultScaledMessages(bank[state.selected_bank].touchbar_length, bank[state.selected_bank].touchbar, port_buf, i);
+                    } else if (patch.touchbar_length > 0) {
+                        sendDefaultScaledMessages(patch.touchbar_length, patch.touchbar, port_buf, i);
+                    }
+                    break;
+                default:
+                    if (bank[state.selected_bank].touchbar_length > 0) {
+                        sendScaledMessages(bank[state.selected_bank].touchbar_length, bank[state.selected_bank].touchbar, touchbar_range, state.touchbar, port_buf, i);
+                    } else if (patch.touchbar_length > 0) {
+                        sendScaledMessages(patch.touchbar_length, patch.touchbar, touchbar_range, state.touchbar, port_buf, i);
+                    }
+                    break;
+            }
             state.action.touchbar = TOUCHBAR_ACTION_NONE;
         }
         if (state.action.stick != STICK_ACTION_NONE) {
-            printf("state.action.stick!\t");
+
             unsigned int volume = state.stick.last_sent_value;
             if (state.action.stick == STICK_ACTION_ROTATE_COUNTER_CLOCKWISE) {
                 volume += state.stick.average_value / 2 ;
@@ -1100,6 +1163,174 @@ void readMidiInfo (xmlNode *node, struct midi_info_t *midiData) {
     }
 }
 
+int parseAsMidiValue (xmlNode * node, char * prop) {
+    int numberValue;
+    char stringValue[20];
+
+    if (xmlGetProp(node, prop)) {
+        sscanf(xmlGetProp(node, prop), "%s", stringValue);
+        if (!strcmp(stringValue, "pitch-max")) {
+            numberValue = MIDI_PITCH_MAX;
+        } else if (!strcmp(stringValue, "pitch-mid")) {
+            numberValue = MIDI_PITCH_CENTER;
+        } else if (!strcmp(stringValue, "pitch-min")) {
+            numberValue = MIDI_PITCH_MIN;
+        } else if (!strcmp(stringValue, "cc2-max")) {
+            numberValue = MIDI_CC2_MAX;
+        } else if (!strcmp(stringValue, "cc2-mid")) {
+            numberValue = MIDI_CC2_MID;
+        } else if (!strcmp(stringValue, "cc2-min")) {
+            numberValue = MIDI_CC2_MIN;
+        } else {
+            sscanf(xmlGetProp(node, prop), "%d", &numberValue);
+        }
+    } else {
+        numberValue = MIDI_DATA_NULL;
+    }
+
+    return numberValue;
+}
+
+
+
+int parseAsCCNumber (xmlNode * node, char * prop) {
+    int numberValue;
+    char stringValue[20];
+
+    if (xmlGetProp(node, prop)) {
+        sscanf(xmlGetProp(node, prop), "%s", stringValue);
+        if (!strcmp(stringValue, "bank_select") || !strcmp(stringValue, "bank_select_msb")) {
+            numberValue = MIDI_CC_BANK_SELECT_MSB;
+        } else if (!strcmp(stringValue, "bank_select_lsb")) {
+            numberValue = MIDI_CC_BANK_SELECT_LSB;
+        } else if (!strcmp(stringValue, "modulation") || !strcmp(stringValue, "modulation_msb")) {
+            numberValue = MIDI_CC_MODULATION_MSB;
+        } else if (!strcmp(stringValue, "modulation_lsb")) {
+            numberValue = MIDI_CC_MODULATION_LSB;
+        } else if (!strcmp(stringValue, "breath") || !strcmp(stringValue, "breath_msb")) {
+            numberValue = MIDI_CC_BREATH_CTL_MSB;
+        } else if (!strcmp(stringValue, "breath_lsb")) {
+            numberValue = MIDI_CC_BREATH_CTL_LSB;
+        } else if (!strcmp(stringValue, "foot_ctl") || !strcmp(stringValue, "foot_ctl_msb")) {
+            numberValue = MIDI_CC_FOOT_CTL_MSB;
+        } else if (!strcmp(stringValue, "foot_ctl_lsb")) {
+            numberValue = MIDI_CC_FOOT_CTL_LSB;
+        } else if (!strcmp(stringValue, "portamento_time") || !strcmp(stringValue, "portamento_time_msb")) {
+            numberValue = MIDI_CC_PORTAMENTO_TIME_MSB;
+        } else if (!strcmp(stringValue, "portamento_time_lsb")) {
+            numberValue = MIDI_CC_PORTAMENTO_TIME_LSB;
+        } else if (!strcmp(stringValue, "data_entry") || !strcmp(stringValue, "data_entry_msb")) {
+            numberValue = MIDI_CC_DATA_ENTRY_MSB;
+        } else if (!strcmp(stringValue, "data_entry_lsb")) {
+            numberValue = MIDI_CC_DATA_ENTRY_LSB;
+        } else if (!strcmp(stringValue, "volume") || !strcmp(stringValue, "volume_msb")) {
+            numberValue = MIDI_CC_VOLUME_MSB;
+        } else if (!strcmp(stringValue, "volume_lsb")) {
+            numberValue = MIDI_CC_VOLUME_LSB;
+        } else if (!strcmp(stringValue, "balance") || !strcmp(stringValue, "balance_msb")) {
+            numberValue = MIDI_CC_BALANCE_MSB;
+        } else if (!strcmp(stringValue, "balance_lsb")) {
+            numberValue = MIDI_CC_BALANCE_LSB;
+        } else if (!strcmp(stringValue, "pan") || !strcmp(stringValue, "pan_msb")) {
+            numberValue = MIDI_CC_PAN_MSB;
+        } else if (!strcmp(stringValue, "pan_lsb")) {
+            numberValue = MIDI_CC_PAN_LSB;
+        } else if (!strcmp(stringValue, "expression") || !strcmp(stringValue, "expression_msb")) {
+            numberValue = MIDI_CC_EXPRESSION_MSB;
+        } else if (!strcmp(stringValue, "expression_lsb")) {
+            numberValue = MIDI_CC_EXPRESSION_LSB;
+        } else if (!strcmp(stringValue, "effect_ctl1") || !strcmp(stringValue, "effect_ctl1_msb")) {
+            numberValue = MIDI_CC_EFFECT_CTL_1_MSB;
+        } else if (!strcmp(stringValue, "effect_ctl1_lsb")) {
+            numberValue = MIDI_CC_EFFECT_CTL_1_LSB;
+        } else if (!strcmp(stringValue, "effect_ctl2") || !strcmp(stringValue, "effect_ctl2_msb")) {
+            numberValue = MIDI_CC_EFFECT_CTL_2_MSB;
+        } else if (!strcmp(stringValue, "effect_ctl2_lsb")) {
+            numberValue = MIDI_CC_EFFECT_CTL_2_LSB;
+        } else if (!strcmp(stringValue, "general_ctl1") || !strcmp(stringValue, "general_ctl1_msb")) {
+            numberValue = MIDI_CC_GENERAL_CTL_1_MSB;
+        } else if (!strcmp(stringValue, "general_ctl1_lsb")) {
+            numberValue = MIDI_CC_GENERAL_CTL_1_LSB;
+        } else if (!strcmp(stringValue, "general_ctl2") || !strcmp(stringValue, "general_ctl2_msb")) {
+            numberValue = MIDI_CC_GENERAL_CTL_2_MSB;
+        } else if (!strcmp(stringValue, "general_ctl2_lsb")) {
+            numberValue = MIDI_CC_GENERAL_CTL_2_LSB;
+        } else if (!strcmp(stringValue, "general_ctl3") || !strcmp(stringValue, "general_ctl3_msb")) {
+            numberValue = MIDI_CC_GENERAL_CTL_3_MSB;
+        } else if (!strcmp(stringValue, "general_ctl3_lsb")) {
+            numberValue = MIDI_CC_GENERAL_CTL_3_LSB;
+        } else if (!strcmp(stringValue, "general_ctl4") || !strcmp(stringValue, "general_ctl4_msb")) {
+            numberValue = MIDI_CC_GENERAL_CTL_4_MSB;
+        } else if (!strcmp(stringValue, "general_ctl4_lsb")) {
+            numberValue = MIDI_CC_GENERAL_CTL_4_LSB;
+        } else if (!strcmp(stringValue, "resonance")) {
+            numberValue = MIDI_CC_RESONANCE;
+        } else if (!strcmp(stringValue, "brightness") || !strcmp(stringValue, "filter_cutoff")) {
+            numberValue = MIDI_CC_BRIGHTNESS;
+        } else if (!strcmp(stringValue, "release") || !strcmp(stringValue, "release_time")) {
+            numberValue = MIDI_CC_RELEASE_TIME;
+        } else if (!strcmp(stringValue, "attack") || !strcmp(stringValue, "attack_time")) {
+            numberValue = MIDI_CC_ATTACK_TIME;
+        } else {
+            sscanf(xmlGetProp(node, prop), "%d", &numberValue);
+        }
+    } else {
+        numberValue = MIDI_DATA_NULL;
+    }
+
+    return numberValue;
+}
+
+
+
+int parseAsInputValue (xmlNode * node, char * prop) {
+    int numberValue;
+    char stringValue[20];
+
+    if (xmlGetProp(node, prop)) {
+        sscanf(xmlGetProp(node, prop), "%s", stringValue);
+        if (!strcmp(stringValue, "touch_none")) {
+            numberValue = TOUCHBAR_STATE_NONE;
+        } else if (!strcmp(stringValue, "touch_1st")) {
+            numberValue = TOUCHBAR_STATE_1ST;
+        } else if (!strcmp(stringValue, "touch_1st_2nd")) {
+            numberValue = TOUCHBAR_STATE_1ST_AND_2ND;
+        } else if (!strcmp(stringValue, "touch_2nd")) {
+            numberValue = TOUCHBAR_STATE_2ND;
+        } else if (!strcmp(stringValue, "touch_2nd_3rd")) {
+            numberValue = TOUCHBAR_STATE_2ND_AND_3RD;
+        } else if (!strcmp(stringValue, "touch_3rd")) {
+            numberValue = TOUCHBAR_STATE_3RD;
+        } else if (!strcmp(stringValue, "touch_3rd_4th")) {
+            numberValue = TOUCHBAR_STATE_3RD_AND_4TH;
+        } else if (!strcmp(stringValue, "touch_4th")) {
+            numberValue = TOUCHBAR_STATE_4TH;
+        } else if (!strcmp(stringValue, "touch_4th_5th")) {
+            numberValue = TOUCHBAR_STATE_4TH_AND_5TH;
+        } else if (!strcmp(stringValue, "touch_5th")) {
+            numberValue = TOUCHBAR_STATE_5TH;
+        } else if (!strcmp(stringValue, "touchbar_min")) {
+            numberValue = touchbar_range.min;
+        } else if (!strcmp(stringValue, "touchbar_mid")) {
+            numberValue = (touchbar_range.max - touchbar_range.min) / 2;
+        } else if (!strcmp(stringValue, "touchbar_max")) {
+            numberValue = touchbar_range.max;
+        } else if (!strcmp(stringValue, "whammy_min")) {
+            numberValue = whammy_range.min;
+        } else if (!strcmp(stringValue, "whammy_mid")) {
+            numberValue = (whammy_range.max - whammy_range.min) / 2;
+        } else if (!strcmp(stringValue, "whammy_max")) {
+            numberValue = whammy_range.max;
+        } else {
+            sscanf(xmlGetProp(node, prop), "%d", &numberValue);
+        }
+    } else {
+        numberValue = MIDI_DATA_NULL;
+    }
+
+    return numberValue;
+}
+
 void readScaledMessage (xmlNode *node, struct scaled_message_t *sm) {
 
 	char typeString[5] = "";
@@ -1113,23 +1344,25 @@ void readScaledMessage (xmlNode *node, struct scaled_message_t *sm) {
 	} else if (!strcmp(typeString, "cc")) {
 		(*sm).type = SCALED_CC;
 	}
-    if (xmlGetProp(node, "cc")) {
-		sscanf(xmlGetProp(node, "cc"), "%d", &(*sm).cc);
-	} else {
-		sm->cc = MIDI_DATA_NULL;
-	}
-	if (xmlGetProp(node, "cc_lsb")) {
-		sscanf(xmlGetProp(node, "cc_lsb"), "%d", &(*sm).cc_lsb);
-	} else {
-		sm->cc_lsb = MIDI_DATA_NULL;	
-	}
+
+    sm->cc = parseAsCCNumber(node, "cc");
+    sm->cc_lsb = parseAsCCNumber(node, "cc_lsb");
+
+    if (xmlGetProp(node, "default")) {
+        sscanf(xmlGetProp(node, "default"), "%d", &(*sm).default_value);
+    } else {
+        (*sm).default_value = MIDI_DATA_NULL;
+    }
 
     if (xmlGetProp(node, "min")) {
-		sscanf(xmlGetProp(node, "min"), "%d", &(*sm).min);
-	}
+        sscanf(xmlGetProp(node, "min"), "%d", &(*sm).out.min);
+    }
     if (xmlGetProp(node, "max")) {
-		sscanf(xmlGetProp(node, "max"), "%d", &(*sm).max);
-	}
+        sscanf(xmlGetProp(node, "max"), "%d", &(*sm).out.max);
+    }
+
+    (*sm).in.min = parseAsInputValue(node, "in_min");
+    (*sm).in.max = parseAsInputValue(node, "in_max");
 
     if (xmlGetProp(node, "midi_channel")) {
 		sscanf(xmlGetProp(node, "midi_channel"), "%d", &(*sm).midi_channel);
@@ -1137,7 +1370,7 @@ void readScaledMessage (xmlNode *node, struct scaled_message_t *sm) {
 		(*sm).midi_channel = MIDI_DATA_NULL;
 	}
 
-	printf("Scaled Message read: %s\tmin: %d\tmax: %d\tcc: %d\tcc_lsb: %d\n", typeString, sm->min, sm->max, sm->cc, sm->cc_lsb);
+	//printf("Scaled Message read: %s\tmin: %d\tmax: %d\tcc: %d\tcc_lsb: %d\n", typeString, sm->out.min, sm->out.max, sm->cc, sm->cc_lsb);
 }
 
 int getFretStatus (xmlNode* node) {
@@ -1206,27 +1439,27 @@ struct cc_message_t* readCC (xmlNode* node, int *number_of_messages) {
 }
 
 
-struct scaled_message_t* readWhammy (xmlNode *whammyNode, int *number_of_messages) {
+struct scaled_message_t* readScaledMessages (xmlNode *messagesNode, int *number_of_messages) {
 	xmlNode *message_element;
 	int message_index;
-	struct scaled_message_t* whammy;
+	struct scaled_message_t* messages;
 
-    if (xmlGetProp(whammyNode, "number_of_messages")) {
-        sscanf(xmlGetProp(whammyNode, "number_of_messages"), "%d", number_of_messages);
+    if (xmlGetProp(messagesNode, "number_of_messages")) {
+        sscanf(xmlGetProp(messagesNode, "number_of_messages"), "%d", number_of_messages);
     }
-    message_element = whammyNode->children;
+    message_element = messagesNode->children;
     message_index = 0;
-	whammy = malloc(*number_of_messages * sizeof(struct scaled_message_t));
+	messages = malloc(*number_of_messages * sizeof(struct scaled_message_t));
 
    	while (message_element != NULL && message_index < *number_of_messages) {
    		if (message_element->type == XML_ELEMENT_NODE && message_index < *number_of_messages) {
-       		readScaledMessage(message_element, &(whammy[message_index]));
+       		readScaledMessage(message_element, &(messages[message_index]));
        		message_index++;
        }
        message_element = message_element->next;
    	}
 
-   	return whammy;
+   	return messages;
 }
 
 struct counter_t* readCounters (xmlNode *countersNode, int *number_of_counters) {
@@ -1244,7 +1477,7 @@ struct counter_t* readCounters (xmlNode *countersNode, int *number_of_counters) 
 		if (counterNode->type == XML_ELEMENT_NODE && counter_index < *number_of_counters) {
 			if (xmlGetProp(counterNode, "length")) {
 				sscanf(xmlGetProp(counterNode, "length"), "%d", &counters[counter_index].length);
-				printf("counter %d:\tlength: %d\n", counter_index, counters[counter_index].length);
+				//printf("counter %d:\tlength: %d\n", counter_index, counters[counter_index].length);
 			}
 			counters[counter_index].position = 0;
 			counter_index++;
@@ -1382,7 +1615,10 @@ void readPatchFromFile (const char *file) {
                 }		        	
 
                 if (!strcmp(cur->name, "whammy")) {
-                	patch.whammy = readWhammy(cur, &patch.whammy_length);
+                	patch.whammy = readScaledMessages(cur, &patch.whammy_length);
+                }
+                if (!strcmp(cur->name, "touchbar")) {
+                    patch.touchbar = readScaledMessages(cur, &patch.touchbar_length);
                 }
 
 		        if (!strcmp(cur->name, "banks")) {
@@ -1405,9 +1641,12 @@ void readPatchFromFile (const char *file) {
 					                if (!strcmp(bank_content->name, "sequence_counters")) {
 					                	bank[bank_index].counter = readCounters(bank_content, &(bank[bank_index]).number_of_counters);
 					                }
-					                if (!strcmp(bank_content->name, "whammy")) {
-					                	bank[bank_index].whammy = readWhammy(bank_content, &(bank[bank_index]).whammy_length);
-					                }
+                                    if (!strcmp(bank_content->name, "whammy")) {
+                                        bank[bank_index].whammy = readScaledMessages(bank_content, &(bank[bank_index]).whammy_length);
+                                    }
+                                    if (!strcmp(bank_content->name, "touchbar")) {
+                                        bank[bank_index].touchbar = readScaledMessages(bank_content, &(bank[bank_index]).touchbar_length);
+                                    }
 		                            if (!strcmp(bank_content->name, "chords")) {
 		                            	readChords(bank_content, bank[bank_index].chord);
 		                            }
@@ -1487,6 +1726,10 @@ void init() {
         state.delayed_notes[i].note.velocity = 0;
     }
 
+    whammy_range.min = 0;
+    whammy_range.max = CWIID_GUITAR_WHAMMY_MAX;
+    touchbar_range.min = CWIID_GUITAR_TOUCHBAR_VALUE_1ST;
+    touchbar_range.max = CWIID_GUITAR_TOUCHBAR_VALUE_5TH;
 
     patch.midi.channel = 0;
     patch.midi.bank_msb = MIDI_DATA_NULL;
@@ -1509,6 +1752,9 @@ void init() {
         bank[i].midi.bank_msb = MIDI_DATA_NULL;
         bank[i].midi.bank_lsb = MIDI_DATA_NULL;
         bank[i].midi.program = MIDI_DATA_NULL;
+        bank[i].whammy_length = 0;
+        bank[i].touchbar_length = 0;
+        bank[i].cc_length = 0;
         bank[i].selectable = 0;
     }    
 

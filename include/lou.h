@@ -3,8 +3,15 @@
 // amount of whammy movement before sending midi
 #define MIDI_PITCH_MAX       0x3FFF
 #define MIDI_PITCH_CENTER    0x2000
+#define MIDI_PITCH_MIN       0x0000
 #define MIDI_MODULATION_MAX  0x7F
-#define MIDI_DATA_NULL       0xFF   
+#define MIDI_CC2_MAX         0x3FFF
+#define MIDI_CC2_MID         0x2000
+#define MIDI_CC2_MIN         0x0000
+
+#define MIDI_DATA_NULL       0xFFFF   
+
+
 
 #define MIDI_NOTE_OFF       0x80
 #define MIDI_NOTE_ON        0x90
@@ -12,20 +19,43 @@
 #define MIDI_PITCH_WHEEL    0xE0
 #define MIDI_CONTROL_CHANGE 0xB0
 
-#define MIDI_CC_BANK_SELECT_MSB  0x00
-#define MIDI_CC_BANK_SELECT_LSB  0x20
-#define MIDI_CC_MODULATION_MSB   0x01
-#define MIDI_CC_MODULATION_LSB   0x21
-#define MIDI_CC_BREATH_CTL_MSB   0x02
-#define MIDI_CC_BREATH_CTL_LSB   0x22
-#define MIDI_CC_FOOT_CTL_MSB     0x04
-#define MIDI_CC_FOOT_CTL_LSB     0x24
-#define MIDI_CC_VOLUME_MSB       0x07
-#define MIDI_CC_VOLUME_LSB       0x27
-#define MIDI_CC_BALANCE_MSB      0x08
-#define MIDI_CC_BALANCE_LSB      0x28
-#define MIDI_CC_EFFECT_CTL_1_MSB 0x0C
-#define MIDI_CC_EFFECT_CTL_1_LSB 0x2C
+#define MIDI_CC_BANK_SELECT_MSB     0x00
+#define MIDI_CC_BANK_SELECT_LSB     0x20
+#define MIDI_CC_MODULATION_MSB      0x01
+#define MIDI_CC_MODULATION_LSB      0x21
+#define MIDI_CC_BREATH_CTL_MSB      0x02
+#define MIDI_CC_BREATH_CTL_LSB      0x22
+#define MIDI_CC_FOOT_CTL_MSB        0x04
+#define MIDI_CC_FOOT_CTL_LSB        0x24
+#define MIDI_CC_PORTAMENTO_TIME_MSB 0x05
+#define MIDI_CC_PORTAMENTO_TIME_LSB 0x25
+#define MIDI_CC_DATA_ENTRY_MSB      0x06
+#define MIDI_CC_DATA_ENTRY_LSB      0x26
+#define MIDI_CC_VOLUME_MSB          0x07
+#define MIDI_CC_VOLUME_LSB          0x27
+#define MIDI_CC_BALANCE_MSB         0x08
+#define MIDI_CC_BALANCE_LSB         0x28
+#define MIDI_CC_PAN_MSB             0x0A
+#define MIDI_CC_PAN_LSB             0x2A
+#define MIDI_CC_EXPRESSION_MSB      0x0B
+#define MIDI_CC_EXPRESSION_LSB      0x2B
+#define MIDI_CC_EFFECT_CTL_1_MSB    0x0C
+#define MIDI_CC_EFFECT_CTL_1_LSB    0x2C
+#define MIDI_CC_EFFECT_CTL_2_MSB    0x0D
+#define MIDI_CC_EFFECT_CTL_2_LSB    0x2D
+#define MIDI_CC_GENERAL_CTL_1_MSB   0x10
+#define MIDI_CC_GENERAL_CTL_1_LSB   0x30
+#define MIDI_CC_GENERAL_CTL_2_MSB   0x11
+#define MIDI_CC_GENERAL_CTL_2_LSB   0x31
+#define MIDI_CC_GENERAL_CTL_3_MSB   0x12
+#define MIDI_CC_GENERAL_CTL_3_LSB   0x32
+#define MIDI_CC_GENERAL_CTL_4_MSB   0x13
+#define MIDI_CC_GENERAL_CTL_4_LSB   0x33
+#define MIDI_CC_SOUND_VARIATION     0x46
+#define MIDI_CC_RESONANCE           0x47
+#define MIDI_CC_RELEASE_TIME        0x48
+#define MIDI_CC_ATTACK_TIME         0x49
+#define MIDI_CC_BRIGHTNESS          0x4A
 
 #define MAX_ACTIVE_NOTES_COUNT   120
 #define MAX_QUEUED_NOTES_COUNT   120
@@ -168,7 +198,9 @@ enum buttons_action_t {
 
 enum scaled_value_type_t {
 	SCALED_CC,
-	SCALED_PITCH
+	SCALED_PITCH,
+	SCALED_NOTE_ON,
+	SCALED_ALL_NOTES_OFF
 };
 
 
@@ -201,6 +233,8 @@ struct note_t {
 struct chord_t {
 	struct note_t * note;
 	int size;
+	int touchbar_length;
+	struct scaled_message_t *touchbar;
 };
 
 struct sequence_t {
@@ -225,12 +259,18 @@ struct midi_info_t {
 	int program;
 };
 
-struct scaled_message_t {
-	char type;
+struct range_t {
 	int min;
 	int max;
+};
+
+struct scaled_message_t {
+	enum scaled_value_type_t type;
+	struct range_t out;
+	struct range_t in;
 	int cc;
 	int cc_lsb;
+	int default_value;
 	int midi_channel;
 };
 
@@ -245,6 +285,8 @@ struct patch_t {
 	struct cc_message_t *cc;
 	int whammy_length;
 	struct scaled_message_t *whammy;
+	int touchbar_length;
+	struct scaled_message_t *touchbar;
 };
 
 
@@ -320,6 +362,8 @@ struct bank_t {
 	struct cc_message_t *cc;
 	int whammy_length;
 	struct scaled_message_t *whammy;
+	int touchbar_length;
+	struct scaled_message_t *touchbar;
 	int number_of_counters;
 	struct counter_t *counter;
 };
@@ -346,3 +390,6 @@ struct itimerspec time_left;
 
 cwiid_wiimote_t *wiimote;	/* wiimote handle */
 cwiid_mesg_callback_t cwiid_callback;
+
+struct range_t whammy_range;
+struct range_t touchbar_range;
