@@ -1348,8 +1348,8 @@ void readSequences(xmlNode *node, struct sequence_t * sequences) {
 void readPatchFromFile (const char *file) {
 
     xmlDoc *doc = NULL;
-    xmlNode *root_element, *bank_element, *bank_content, *sequence_element, *step_element, *counters_element, *chord_element, *note_element, *message_element, *scaled_message_element, *cur = NULL;
-    int bank_index, chord_index, sequence_index, step_index, note_index, number_of_notes, number_of_steps, bank_midi_channel, note_midi_channel, message_index, number_of_messages;
+    xmlNode *root_element, *bank_element, *bank_content, *cur = NULL;
+    int bank_index;
 
     /*
      * this initialize the library and check potential ABI mismatches
@@ -1459,11 +1459,13 @@ void init() {
     state.action.strummer = STRUMMER_ACTION_NONE;
     state.action.system = SYSTEM_ACTION_NONE;
     state.action.whammy = WHAMMY_ACTION_NONE;
+    state.active_notes.size = 0;
     state.buttons_previous = 0;
     state.chord = 0;
     state.drums = 0;
     state.drums_buttons_previous = 0;
     state.previous_strummed_chord = 0xFFFF;
+    state.queued_notes.size = 0;
     state.stick.acc.count = 0;
     state.stick.acc.value = 0;
     state.stick.average_value = 0;
@@ -1477,15 +1479,13 @@ void init() {
     state.transpose = 0;
     state.whammy = WHAMMY_STATE_UNKNOWN;
 
+    state.active_notes.note = malloc(MAX_ACTIVE_NOTES_COUNT * sizeof(struct note_t));
+    state.queued_notes.note = malloc(MAX_QUEUED_NOTES_COUNT * sizeof(struct note_t));
     state.sustain_string = malloc(MAX_SUSTAIN_STRINGS_COUNT * sizeof(struct note_t));
     state.delayed_notes = malloc(MAX_DELAYED_NOTES_COUNT * sizeof(struct delayed_note_t));
     for(i = 0; i < MAX_DELAYED_NOTES_COUNT; i++){
         state.delayed_notes[i].note.velocity = 0;
     }
-    state.queued_notes.size = 0;
-    state.queued_notes.note = malloc(MAX_QUEUED_NOTES_COUNT * sizeof(struct note_t));
-    state.active_notes.size = 0;
-    state.active_notes.note = malloc(MAX_ACTIVE_NOTES_COUNT * sizeof(struct note_t));
 
 
     patch.midi.channel = 0;
