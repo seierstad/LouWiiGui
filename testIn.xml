@@ -9,8 +9,13 @@
 		<scaled_message type="pitch" min="8192" max="0" />
 		<scaled_message type="pitch" min="8192" max="0" midi_channel="3" />
 		<scaled_message type="cc"    min="127"  max="0" cc="74" />
-		<!--scaled_message type="cc"    min="127"  max="16" cc="1" /-->
+		<scaled_message type="cc"    min="127"  max="16" cc="1" />
 	</whammy>
+	<strip>
+		<scaled_message type="pitch" min="8192" max="0" />
+		<scaled_message type="pitch" min="8192" max="0" midi_channel="3" />
+		<scaled_message type="cc"    min="127"  max="0" cc="74" />
+	</strip>
 	<banks>
 		<bank name="intro" midi_channel="1" midi_program="2">
 			<cc number_of_messages="1">

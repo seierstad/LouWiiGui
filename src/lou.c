@@ -39,17 +39,17 @@
 
 #define LOUWIIGUI_CWIID_RPT_MODE (CWIID_RPT_EXT | CWIID_RPT_BTN) // | CWIID_RPT_ACC)
 
-#define USE_MIDI_CHANNEL bank[selected_bank].midi.channel ? bank[selected_bank].midi.channel : midi.channel
+#define USE_MIDI_CHANNEL bank[state.selected_bank].midi.channel ? bank[state.selected_bank].midi.channel : patch.midi.channel
 
 void neio(int sig, siginfo_t *si, void *uc) {
     struct delayed_note_t * dn;
     dn = (struct delayed_note_t *) si->si_value.sival_ptr;
-    queued_notes.note[queued_notes.size].velocity = dn->note.velocity;
-    queued_notes.note[queued_notes.size].note_number = dn->note.note_number;
-    queued_notes.note[queued_notes.size].midi_channel = dn->note.midi_channel;
-    queued_notes.note[queued_notes.size].sustain_mode = dn->note.sustain_mode;
-    queued_notes.note[queued_notes.size].string = dn->note.string;
-    queued_notes.size++;
+    state.queued_notes.note[state.queued_notes.size].velocity = dn->note.velocity;
+    state.queued_notes.note[state.queued_notes.size].note_number = dn->note.note_number;
+    state.queued_notes.note[state.queued_notes.size].midi_channel = dn->note.midi_channel;
+    state.queued_notes.note[state.queued_notes.size].sustain_mode = dn->note.sustain_mode;
+    state.queued_notes.note[state.queued_notes.size].string = dn->note.string;
+    state.queued_notes.size++;
     dn->note.velocity = 0;
 }
 // end attempt
@@ -107,25 +107,25 @@ void sendCCMessage(struct cc_message_t cc, void *port_buf, jack_nframes_t time) 
 }
 
 void selectBank (unsigned char bank_number, void *port_buf, jack_nframes_t time) {
-    if (bank[bank_number].selectable && selected_bank != bank_number) {
-        selected_bank = bank_number;
+    if (bank[bank_number].selectable && state.selected_bank != bank_number) {
+        state.selected_bank = bank_number;
 
         if (
-            bank[selected_bank].midi.program != MIDI_DATA_NULL || 
-            bank[selected_bank].midi.bank_msb != MIDI_DATA_NULL || 
-            bank[selected_bank].midi.bank_lsb != MIDI_DATA_NULL) {
-            sendBankProgramChange(bank[selected_bank].midi.bank_msb, bank[selected_bank].midi.bank_lsb, bank[selected_bank].midi.program, port_buf, time); 
+            bank[state.selected_bank].midi.program != MIDI_DATA_NULL || 
+            bank[state.selected_bank].midi.bank_msb != MIDI_DATA_NULL || 
+            bank[state.selected_bank].midi.bank_lsb != MIDI_DATA_NULL) {
+            sendBankProgramChange(bank[state.selected_bank].midi.bank_msb, bank[state.selected_bank].midi.bank_lsb, bank[state.selected_bank].midi.program, port_buf, time); 
         } else {
-            sendBankProgramChange(midi.bank_msb, midi.bank_lsb, midi.program, port_buf, time); 
+            sendBankProgramChange(patch.midi.bank_msb, patch.midi.bank_lsb, patch.midi.program, port_buf, time); 
         }
 
-        if (bank[selected_bank].cc_length > 0) {
-        	for (int j = 0; j < bank[selected_bank].cc_length; j++) {
-        		sendCCMessage(bank[selected_bank].cc[j], port_buf, time);
+        if (bank[state.selected_bank].cc_length > 0) {
+        	for (int j = 0; j < bank[state.selected_bank].cc_length; j++) {
+        		sendCCMessage(bank[state.selected_bank].cc[j], port_buf, time);
         	}
         }
 
-        printf("selected bank: %d\n", selected_bank);
+        printf("selected bank: %d\n", state.selected_bank);
     }
 }
 
@@ -141,74 +141,74 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
         switch (mesg[i].type) {
             case CWIID_MESG_BTN:
                 buttons = ((uint16_t)mesg[i].btn_mesg.buttons);
-                buttons_change = buttons ^ buttons_previous;
-                buttons_previous = buttons;
+                buttons_change = buttons ^ state.buttons_previous;
+                state.buttons_previous = buttons;
                 if ((buttons & CWIID_BTN_MINUS & buttons_change) == CWIID_BTN_MINUS) {
-                    transpose += 1;
+                    state.transpose += 1;
                 }
                 if ((buttons & CWIID_BTN_PLUS & buttons_change) == CWIID_BTN_PLUS) {
-                    transpose -= 1;
+                    state.transpose -= 1;
                 }
                 if ((buttons & CWIID_BTN_HOME & buttons_change) == CWIID_BTN_HOME) {
-                    transpose = 0;
+                    state.transpose = 0;
                 }
-                if ((buttons & CWIID_BTN_1) && (buttons & CWIID_BTN_2) && bank[2].selectable && selected_bank != 2) {
-                    buttons_action = BUTTONS_ACTION_BANK_CHANGE;
-                    buttons_action_data = 2;
+                if ((buttons & CWIID_BTN_1) && (buttons & CWIID_BTN_2) && bank[2].selectable && state.selected_bank != 2) {
+                    state.action.buttons = BUTTONS_ACTION_BANK_CHANGE;
+                    state.action.buttons_data = 2;
                 }
-                if ((buttons & CWIID_BTN_1) && !(buttons & CWIID_BTN_2) && !(buttons_change & CWIID_BTN_2) && bank[0].selectable && selected_bank != 0) {
-                    buttons_action = BUTTONS_ACTION_BANK_CHANGE;
-                    buttons_action_data = 0;
+                if ((buttons & CWIID_BTN_1) && !(buttons & CWIID_BTN_2) && !(buttons_change & CWIID_BTN_2) && bank[0].selectable && state.selected_bank != 0) {
+                    state.action.buttons = BUTTONS_ACTION_BANK_CHANGE;
+                    state.action.buttons_data = 0;
                 }
-                if ((buttons & CWIID_BTN_2) && !(buttons & CWIID_BTN_1) && !(buttons_change & CWIID_BTN_1) && bank[1].selectable && selected_bank != 1) {
-                    buttons_action = BUTTONS_ACTION_BANK_CHANGE;
-                    buttons_action_data = 1;
+                if ((buttons & CWIID_BTN_2) && !(buttons & CWIID_BTN_1) && !(buttons_change & CWIID_BTN_1) && bank[1].selectable && state.selected_bank != 1) {
+                    state.action.buttons = BUTTONS_ACTION_BANK_CHANGE;
+                    state.action.buttons_data = 1;
                 }
 
 
-                printf("buttons: %d\ttranspose: %d\n", buttons, transpose);
+                printf("buttons: %d\ttranspose: %d\n", buttons, state.transpose);
                 break;
             case CWIID_MESG_ACC:
                 printf("acc: x %d\ty %d\tz %d", mesg[i].acc_mesg.acc[0], mesg[i].acc_mesg.acc[1], mesg[i].acc_mesg.acc[2]);
                 break;
             case CWIID_MESG_DRUMS:
-                drums_buttons_change = ((uint8_t)mesg[i].drums_mesg.buttons) ^ drums_buttons_previous;
-                drums_buttons_previous = (uint8_t)mesg[i].drums_mesg.buttons;
+                drums_buttons_change = ((uint8_t)mesg[i].drums_mesg.buttons) ^ state.drums_buttons_previous;
+                state.drums_buttons_previous = (uint8_t)mesg[i].drums_mesg.buttons;
 
                 if ((mesg[i].drums_mesg.buttons & CWIID_DRUMS_PEDAL & drums_buttons_change) == CWIID_DRUMS_PEDAL 
         //            && (drums_buttons_change & CWIID_DRUMS_PEDAL) == CWIID_DRUMS_PEDAL
                     ) {
-                    drums_action |= PEDAL;
+                    state.action.drums |= PEDAL;
                     printf("pedal\n");
                 }
                 if ((mesg[i].drums_mesg.buttons & CWIID_DRUMS_RED & drums_buttons_change) == CWIID_DRUMS_RED 
         //            && (drums_buttons_change & CWIID_DRUMS_RED) == CWIID_DRUMS_RED
                     ) {
-                    drums_action |= RED;
+                    state.action.drums |= RED;
                     printf("red\n");
                 }
                 if ((mesg[i].drums_mesg.buttons & CWIID_DRUMS_YELLOW & drums_buttons_change) == CWIID_DRUMS_YELLOW 
         //            && (drums_buttons_change & CWIID_DRUMS_YELLOW) == CWIID_DRUMS_YELLOW
                     ) {
-                    drums_action |= YELLOW;
+                    state.action.drums |= YELLOW;
                     printf("yellow\n");
                 }
                 if ((mesg[i].drums_mesg.buttons & CWIID_DRUMS_BLUE & drums_buttons_change) == CWIID_DRUMS_BLUE 
         //            && (drums_buttons_change & CWIID_DRUMS_BLUE) == CWIID_DRUMS_BLUE
                     ) {
-                    drums_action |= BLUE;
+                    state.action.drums |= BLUE;
                     printf("blue\n");
                 }
                 if ((mesg[i].drums_mesg.buttons & CWIID_DRUMS_ORANGE & drums_buttons_change) == CWIID_DRUMS_ORANGE 
         //            && (drums_buttons_change & CWIID_DRUMS_ORANGE) == CWIID_DRUMS_ORANGE
                     ) {
-                    drums_action |= ORANGE;
+                    state.action.drums |= ORANGE;
                     printf("orange\n");
                 }
                 if ((mesg[i].drums_mesg.buttons & CWIID_DRUMS_GREEN & drums_buttons_change) == CWIID_DRUMS_GREEN 
         //            && (drums_buttons_change & CWIID_DRUMS_GREEN) == CWIID_DRUMS_GREEN
                     ) {
-                    drums_action |= GREEN;
+                    state.action.drums |= GREEN;
                     printf("green\n");
                 }
 
@@ -216,91 +216,91 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
                 break;
             case CWIID_MESG_GUITAR:
                 printf("guitar message: ");
-                // set strummer_state and strummer_action
-                if (((mesg[i].guitar_mesg.buttons & CWIID_GUITAR_BTN_DOWN) == CWIID_GUITAR_BTN_DOWN) && strummer_state != STRUMMER_STATE_DOWN) {
-                    strummer_state = STRUMMER_STATE_DOWN;
-                    strummer_action = STRUMMER_ACTION_MID_DOWN;
+                // set state.strummer and state.action.strummer
+                if (((mesg[i].guitar_mesg.buttons & CWIID_GUITAR_BTN_DOWN) == CWIID_GUITAR_BTN_DOWN) && state.strummer != STRUMMER_STATE_DOWN) {
+                    state.strummer = STRUMMER_STATE_DOWN;
+                    state.action.strummer = STRUMMER_ACTION_MID_DOWN;
                     timer_settime(countdown_id, 0, &margin, NULL);
                     printf("strum down");
-                } else if (!((mesg[i].guitar_mesg.buttons & CWIID_GUITAR_BTN_DOWN) == CWIID_GUITAR_BTN_DOWN) && strummer_state == STRUMMER_STATE_DOWN) {
-                    strummer_state = STRUMMER_STATE_MID;
-                    strummer_action = STRUMMER_ACTION_DOWN_MID;
+                } else if (!((mesg[i].guitar_mesg.buttons & CWIID_GUITAR_BTN_DOWN) == CWIID_GUITAR_BTN_DOWN) && state.strummer == STRUMMER_STATE_DOWN) {
+                    state.strummer = STRUMMER_STATE_MID;
+                    state.action.strummer = STRUMMER_ACTION_DOWN_MID;
                     timer_gettime(countdown_id, &time_left);
                     if (time_left.it_value.tv_sec > 0 || time_left.it_value.tv_nsec > 0) {
-                        strummer_state = STRUMMER_STATE_SUSTAINED;
+                        state.strummer = STRUMMER_STATE_SUSTAINED;
                     }
                     printf("strum neutral");
-                } else if (((mesg[i].guitar_mesg.buttons & CWIID_GUITAR_BTN_UP) == CWIID_GUITAR_BTN_UP) && strummer_state != STRUMMER_STATE_UP) {
-                    strummer_state = STRUMMER_STATE_UP;
-                    strummer_action = STRUMMER_ACTION_MID_UP;
+                } else if (((mesg[i].guitar_mesg.buttons & CWIID_GUITAR_BTN_UP) == CWIID_GUITAR_BTN_UP) && state.strummer != STRUMMER_STATE_UP) {
+                    state.strummer = STRUMMER_STATE_UP;
+                    state.action.strummer = STRUMMER_ACTION_MID_UP;
                     printf("strum up");
-                } else if (!((mesg[i].guitar_mesg.buttons & CWIID_GUITAR_BTN_UP) == CWIID_GUITAR_BTN_UP) && strummer_state == STRUMMER_STATE_UP) {
-                    strummer_state = STRUMMER_STATE_MID;
-                    strummer_action = STRUMMER_ACTION_UP_MID;
+                } else if (!((mesg[i].guitar_mesg.buttons & CWIID_GUITAR_BTN_UP) == CWIID_GUITAR_BTN_UP) && state.strummer == STRUMMER_STATE_UP) {
+                    state.strummer = STRUMMER_STATE_MID;
+                    state.action.strummer = STRUMMER_ACTION_UP_MID;
                     printf("strum neutral");
                 } else {
-                    strummer_action = STRUMMER_ACTION_NONE;
+                    state.action.strummer = STRUMMER_ACTION_NONE;
                 }
 
                 // set chord state
-                chord_state = 0;
+                state.chord = 0;
                 if ((mesg[i].guitar_mesg.buttons & CWIID_GUITAR_BTN_GREEN) == CWIID_GUITAR_BTN_GREEN) {
-                    chord_state |= GREEN;
+                    state.chord |= GREEN;
                 }
                 if ((mesg[i].guitar_mesg.buttons & CWIID_GUITAR_BTN_RED) == CWIID_GUITAR_BTN_RED) {
-                    chord_state |= RED;
+                    state.chord |= RED;
                 }
                 if ((mesg[i].guitar_mesg.buttons & CWIID_GUITAR_BTN_YELLOW) == CWIID_GUITAR_BTN_YELLOW) {
-                    chord_state |= YELLOW;
+                    state.chord |= YELLOW;
                 }
                 if ((mesg[i].guitar_mesg.buttons & CWIID_GUITAR_BTN_BLUE) == CWIID_GUITAR_BTN_BLUE) {
-                    chord_state |= BLUE;
+                    state.chord |= BLUE;
                 }
                 if ((mesg[i].guitar_mesg.buttons & CWIID_GUITAR_BTN_ORANGE) == CWIID_GUITAR_BTN_ORANGE) {
-                    chord_state |= ORANGE;
+                    state.chord |= ORANGE;
                 }
 
                 //set whammy state and action
-                if (mesg[i].guitar_mesg.whammy != whammy_state) {
-                    if (mesg[i].guitar_mesg.whammy > whammy_state) {
-                        whammy_action = WHAMMY_ACTION_DOWN;
+                if (mesg[i].guitar_mesg.whammy != state.whammy) {
+                    if (mesg[i].guitar_mesg.whammy > state.whammy) {
+                        state.action.whammy = WHAMMY_ACTION_DOWN;
                     } else {
-                        whammy_action = WHAMMY_ACTION_UP;
+                        state.action.whammy = WHAMMY_ACTION_UP;
                     }
 
-                    whammy_state = mesg[i].guitar_mesg.whammy;
+                    state.whammy = mesg[i].guitar_mesg.whammy;
                 }
                 //set touch bar state and action
                 unsigned char new_touchbar_state = mesg[i].guitar_mesg.touch_bar;
-                if (new_touchbar_state != touchbar_state) {
-                    if (touchbar_state == TOUCHBAR_UNTOUCHED) {
-                        touchbar_action = TOUCHBAR_ACTION_TAP;
+                if (new_touchbar_state != state.touchbar) {
+                    if (state.touchbar == TOUCHBAR_UNTOUCHED) {
+                        state.action.touchbar = TOUCHBAR_ACTION_TAP;
                     } 
                     else if (new_touchbar_state == TOUCHBAR_UNTOUCHED) {
-                        touchbar_action = TOUCHBAR_ACTION_RELEASE;
+                        state.action.touchbar = TOUCHBAR_ACTION_RELEASE;
                     }
-                    else if (new_touchbar_state < touchbar_state) {
-                        if (new_touchbar_state >= touchbar_state - TOUCHBAR_SLIDE_MARGIN) {
-                            touchbar_action = TOUCHBAR_ACTION_SLIDE_DOWN;
+                    else if (new_touchbar_state < state.touchbar) {
+                        if (new_touchbar_state >= state.touchbar - TOUCHBAR_SLIDE_MARGIN) {
+                            state.action.touchbar = TOUCHBAR_ACTION_SLIDE_DOWN;
                         } else {
-                            touchbar_action = TOUCHBAR_ACTION_PULLOFF;
+                            state.action.touchbar = TOUCHBAR_ACTION_PULLOFF;
                         }
                     } 
                     else {
-                        if (new_touchbar_state <= touchbar_state + TOUCHBAR_SLIDE_MARGIN) {
-                            touchbar_action = TOUCHBAR_ACTION_SLIDE_UP;
+                        if (new_touchbar_state <= state.touchbar + TOUCHBAR_SLIDE_MARGIN) {
+                            state.action.touchbar = TOUCHBAR_ACTION_SLIDE_UP;
                         } else {
-                            touchbar_action = TOUCHBAR_ACTION_HAMMERON;
+                            state.action.touchbar = TOUCHBAR_ACTION_HAMMERON;
                         }
                     }
-                    touchbar_state = new_touchbar_state;
+                    state.touchbar = new_touchbar_state;
                 }
 
                 // set stick state and action
                 unsigned char new_stick_state[2];
                 new_stick_state[CWIID_X] = mesg[i].guitar_mesg.stick[CWIID_X];
                 new_stick_state[CWIID_Y] = mesg[i].guitar_mesg.stick[CWIID_Y];
-                if (new_stick_state[CWIID_X] != stick_state[CWIID_X] || new_stick_state[CWIID_X] != stick_state[CWIID_X]) {
+                if (new_stick_state[CWIID_X] != state.stick.position[CWIID_X] || new_stick_state[CWIID_X] != state.stick.position[CWIID_X]) {
                     int x_diff = abs(new_stick_state[CWIID_X] - CWIID_GUITAR_STICK_MID);
                     int y_diff = abs(new_stick_state[CWIID_Y] - CWIID_GUITAR_STICK_MID);
                     int distance_from_center = MAX(x_diff, y_diff);
@@ -326,33 +326,33 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
                         new_stick_zone = STICK_ZONE_8TH;
                     } 
 
-                    stick_state[CWIID_X] = new_stick_state[CWIID_X];
-                    stick_state[CWIID_Y] = new_stick_state[CWIID_Y];
+                    state.stick.position[CWIID_X] = new_stick_state[CWIID_X];
+                    state.stick.position[CWIID_Y] = new_stick_state[CWIID_Y];
 
-                    if (new_stick_zone != stick_zone) {
-                        if (new_stick_zone == stick_zone + 1 || (new_stick_zone == STICK_ZONE_1ST && stick_zone == STICK_ZONE_8TH)) {
-                            stick_zone_rotation_clockwise_counter = 0;
-                            stick_zone_rotation_counter_clockwise_counter++;
-                        } else if (new_stick_zone == stick_zone - 1 || (new_stick_zone == STICK_ZONE_8TH && stick_zone == STICK_ZONE_1ST)) {
-                            stick_zone_rotation_clockwise_counter++;
-                            stick_zone_rotation_counter_clockwise_counter = 0;
+                    if (new_stick_zone != state.stick.zone) {
+                        if (new_stick_zone == state.stick.zone + 1 || (new_stick_zone == STICK_ZONE_1ST && state.stick.zone == STICK_ZONE_8TH)) {
+                            state.stick.rotation_cw_counter = 0;
+                            state.stick.rotation_ccw_counter++;
+                        } else if (new_stick_zone == state.stick.zone - 1 || (new_stick_zone == STICK_ZONE_8TH && state.stick.zone == STICK_ZONE_1ST)) {
+                            state.stick.rotation_cw_counter++;
+                            state.stick.rotation_ccw_counter = 0;
                         } else {
-                            stick_zone_rotation_clockwise_counter = 0;
-                            stick_zone_rotation_counter_clockwise_counter = 0;
+                            state.stick.rotation_cw_counter = 0;
+                            state.stick.rotation_ccw_counter = 0;
                         }
 
-                        if (stick_zone_rotation_clockwise_counter >= STICK_ROTATION_ZONE_THRESHOLD) {
-                            stick_action = STICK_ACTION_ROTATE_CLOCKWISE;
-                        } else if (stick_zone_rotation_counter_clockwise_counter >= STICK_ROTATION_ZONE_THRESHOLD) {
-                            stick_action = STICK_ACTION_ROTATE_COUNTER_CLOCKWISE;
+                        if (state.stick.rotation_cw_counter >= STICK_ROTATION_ZONE_THRESHOLD) {
+                            state.action.stick = STICK_ACTION_ROTATE_CLOCKWISE;
+                        } else if (state.stick.rotation_ccw_counter >= STICK_ROTATION_ZONE_THRESHOLD) {
+                            state.action.stick = STICK_ACTION_ROTATE_COUNTER_CLOCKWISE;
                         }
-                        stick_zone_average_value = (stick_zone_acc.count == 0) ? 0 : (stick_zone_acc.value / stick_zone_acc.count);
-                        stick_zone = new_stick_zone;
-                        stick_zone_acc.count = 0;
-                        stick_zone_acc.value = 0;
+                        state.stick.average_value = (state.stick.acc.count == 0) ? 0 : (state.stick.acc.value / state.stick.acc.count);
+                        state.stick.zone = new_stick_zone;
+                        state.stick.acc.count = 0;
+                        state.stick.acc.value = 0;
                     }
-                    stick_zone_acc.count++;
-                    stick_zone_acc.value += distance_from_center;
+                    state.stick.acc.count++;
+                    state.stick.acc.value += distance_from_center;
             
                 }
                 printf("\n");
@@ -362,39 +362,39 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
                 printf("stick x: %x,\ty: %x\n", mesg[i].turntables_mesg.stick[CWIID_X], mesg[i].turntables_mesg.stick[CWIID_Y]);
                 printf("left: %d,\tright: %d\n", mesg[i].turntables_mesg.left_turntable, mesg[i].turntables_mesg.right_turntable);
                 printf("X-fader: %d, effect: %d\n", mesg[i].turntables_mesg.crossfader, mesg[i].turntables_mesg.effect_dial);
-                if (current_turntables_state.crossfader != mesg[i].turntables_mesg.crossfader) {
-                    if (current_turntables_state.crossfader < mesg[i].turntables_mesg.crossfader) {
-                        crossfader_action = CROSSFADER_ACTION_FADE_LEFT;
+                if (state.current_turntables_state.crossfader != mesg[i].turntables_mesg.crossfader) {
+                    if (state.current_turntables_state.crossfader < mesg[i].turntables_mesg.crossfader) {
+                        state.action.crossfader = CROSSFADER_ACTION_FADE_LEFT;
                     } else {
-                        crossfader_action = CROSSFADER_ACTION_FADE_RIGHT;
+                        state.action.crossfader = CROSSFADER_ACTION_FADE_RIGHT;
                     }
-                    current_turntables_state.crossfader = mesg[i].turntables_mesg.crossfader;
+                    state.current_turntables_state.crossfader = mesg[i].turntables_mesg.crossfader;
                 }
-                if (effect_dial_action == EFFECT_DIAL_ACTION_INITIALIZE) {
-                    current_turntables_state.effect_dial = mesg[i].turntables_mesg.effect_dial;
+                if (state.action.effect_dial == EFFECT_DIAL_ACTION_INITIALIZE) {
+                    state.current_turntables_state.effect_dial = mesg[i].turntables_mesg.effect_dial;
                 }
-                if (current_turntables_state.effect_dial != mesg[i].turntables_mesg.effect_dial) {
+                if (state.current_turntables_state.effect_dial != mesg[i].turntables_mesg.effect_dial) {
                 
-                    if (mesg[i].turntables_mesg.effect_dial > current_turntables_state.effect_dial) {
-                        if (mesg[i].turntables_mesg.effect_dial > current_turntables_state.effect_dial + (CWIID_TURNTABLES_EFFECT_DIAL_MAX / 2)) {
+                    if (mesg[i].turntables_mesg.effect_dial > state.current_turntables_state.effect_dial) {
+                        if (mesg[i].turntables_mesg.effect_dial > state.current_turntables_state.effect_dial + (CWIID_TURNTABLES_EFFECT_DIAL_MAX / 2)) {
                             // effect dial has passed 0 (equals 32 modulo 32...)
-                            effect_dial_state.change = mesg[i].turntables_mesg.effect_dial - current_turntables_state.effect_dial - CWIID_TURNTABLES_EFFECT_DIAL_MAX - 1;
-                            effect_dial_action = EFFECT_DIAL_ACTION_ROTATE_COUNTER_CLOCKWISE;
+                            state.effect_dial.change = mesg[i].turntables_mesg.effect_dial - state.current_turntables_state.effect_dial - CWIID_TURNTABLES_EFFECT_DIAL_MAX - 1;
+                            state.action.effect_dial = EFFECT_DIAL_ACTION_ROTATE_COUNTER_CLOCKWISE;
                         } else {
-                            effect_dial_state.change = mesg[i].turntables_mesg.effect_dial - current_turntables_state.effect_dial;
-                            effect_dial_action = EFFECT_DIAL_ACTION_ROTATE_CLOCKWISE;
+                            state.effect_dial.change = mesg[i].turntables_mesg.effect_dial - state.current_turntables_state.effect_dial;
+                            state.action.effect_dial = EFFECT_DIAL_ACTION_ROTATE_CLOCKWISE;
                         }
                     } else {
-                        if (mesg[i].turntables_mesg.effect_dial < current_turntables_state.effect_dial - (CWIID_TURNTABLES_EFFECT_DIAL_MAX / 2)) {
+                        if (mesg[i].turntables_mesg.effect_dial < state.current_turntables_state.effect_dial - (CWIID_TURNTABLES_EFFECT_DIAL_MAX / 2)) {
                             // effect dial has passed max value (equals 0 modulo max)
-                            effect_dial_state.change = mesg[i].turntables_mesg.effect_dial + (CWIID_TURNTABLES_EFFECT_DIAL_MAX + 1 - current_turntables_state.effect_dial);
-                            effect_dial_action = EFFECT_DIAL_ACTION_ROTATE_CLOCKWISE;
+                            state.effect_dial.change = mesg[i].turntables_mesg.effect_dial + (CWIID_TURNTABLES_EFFECT_DIAL_MAX + 1 - state.current_turntables_state.effect_dial);
+                            state.action.effect_dial = EFFECT_DIAL_ACTION_ROTATE_CLOCKWISE;
                         } else {
-                            effect_dial_state.change = mesg[i].turntables_mesg.effect_dial - current_turntables_state.effect_dial;
-                            effect_dial_action = EFFECT_DIAL_ACTION_ROTATE_COUNTER_CLOCKWISE;
+                            state.effect_dial.change = mesg[i].turntables_mesg.effect_dial - state.current_turntables_state.effect_dial;
+                            state.action.effect_dial = EFFECT_DIAL_ACTION_ROTATE_COUNTER_CLOCKWISE;
                         }
                     }
-                    current_turntables_state.effect_dial = mesg[i].turntables_mesg.effect_dial;
+                    state.current_turntables_state.effect_dial = mesg[i].turntables_mesg.effect_dial;
                 }
                 break;
             default:
@@ -419,17 +419,17 @@ void note_on(struct note_t note, void* port_buf, int i) {
 
     struct note_t current_note;
     current_note.velocity = note.velocity;
-    current_note.note_number = note.note_number + transpose;
+    current_note.note_number = note.note_number + state.transpose;
     current_note.midi_channel = use_midi_channel;
     current_note.sustain_mode = note.sustain_mode;
     current_note.string = note.string;
 
     if (current_note.sustain_mode == SUSTAIN_STRING) {
-    	if (sustain_string[current_note.string].note_number != 0) {
+    	if (state.sustain_string[current_note.string].note_number != 0) {
     		buffer = jack_midi_event_reserve(port_buf, i, 3);
-		    buffer[2] = sustain_string[current_note.string].velocity;	/* velocity */
-		    buffer[1] = sustain_string[current_note.string].note_number; /* previous note played on string */
-		    buffer[0] = MIDI_NOTE_OFF + sustain_string[current_note.string].midi_channel - 1;    /* note off */
+		    buffer[2] = state.sustain_string[current_note.string].velocity;	/* velocity */
+		    buffer[1] = state.sustain_string[current_note.string].note_number; /* previous note played on string */
+		    buffer[0] = MIDI_NOTE_OFF + state.sustain_string[current_note.string].midi_channel - 1;    /* note off */
     	}
 
 		buffer = jack_midi_event_reserve(port_buf, i, 3);
@@ -437,14 +437,14 @@ void note_on(struct note_t note, void* port_buf, int i) {
 	    buffer[1] = current_note.note_number;     /* note number */
 	    buffer[0] = MIDI_NOTE_ON + use_midi_channel - 1;
 
-    	sustain_string[current_note.string] = current_note;
+    	state.sustain_string[current_note.string] = current_note;
     } else {
 	    buffer = jack_midi_event_reserve(port_buf, i, 3);
 	    buffer[2] = note.velocity;        /* velocity */
-	    buffer[1] = note.note_number + transpose;    /* note number */
+	    buffer[1] = note.note_number + state.transpose;    /* note number */
 	    buffer[0] = MIDI_NOTE_ON + use_midi_channel - 1;    /* note on */
-	    active_notes.note[active_notes.size] = current_note;
-	    active_notes.size++;
+	    state.active_notes.note[state.active_notes.size] = current_note;
+	    state.active_notes.size++;
 	}
 }
 
@@ -455,27 +455,27 @@ void strum_chord(struct chord_t chord, unsigned char direction, void* port_buf, 
 	        if (chord.note[q].delay == 0) {
 	            note_on(chord.note[q], port_buf, i);
 	        } else if (chord.note[q].velocity > 0) {
-	            while (delayed_notes[r].note.velocity != 0) {
+	            while (state.delayed_notes[r].note.velocity != 0) {
 	                r++;
 	            }
-	            delayed_notes[r].note = chord.note[q];
-	            delayed_notes[r].sevent.sigev_signo = SIGUSR1;
-	            delayed_notes[r].sevent.sigev_notify = SIGEV_SIGNAL;
-	            delayed_notes[r].sevent.sigev_value.sival_ptr = &(delayed_notes[r]);
+	            state.delayed_notes[r].note = chord.note[q];
+	            state.delayed_notes[r].sevent.sigev_signo = SIGUSR1;
+	            state.delayed_notes[r].sevent.sigev_notify = SIGEV_SIGNAL;
+	            state.delayed_notes[r].sevent.sigev_value.sival_ptr = &(state.delayed_notes[r]);
 
-	            timer_create(CLOCK_MONOTONIC, &(delayed_notes[r].sevent), &(delayed_notes[r].timer));
+	            timer_create(CLOCK_MONOTONIC, &(state.delayed_notes[r].sevent), &(state.delayed_notes[r].timer));
 
-	            delayed_notes[r].note.velocity = chord.note[q].velocity;
-	            delayed_notes[r].note.note_number = chord.note[q].note_number;
-	            delayed_notes[r].note.midi_channel = chord.note[q].midi_channel;
-	            delayed_notes[r].note.sustain_mode = chord.note[q].sustain_mode;
-	            delayed_notes[r].note.string = chord.note[q].string;
-	            delayed_notes[r].time.it_value.tv_sec = chord.note[q].delay / 1000;
-	            delayed_notes[r].time.it_value.tv_nsec = (chord.note[q].delay * 1000000) % 1000000000;
-	            delayed_notes[r].time.it_interval.tv_sec = 0;
-	            delayed_notes[r].time.it_interval.tv_nsec = 0;
+	            state.delayed_notes[r].note.velocity = chord.note[q].velocity;
+	            state.delayed_notes[r].note.note_number = chord.note[q].note_number;
+	            state.delayed_notes[r].note.midi_channel = chord.note[q].midi_channel;
+	            state.delayed_notes[r].note.sustain_mode = chord.note[q].sustain_mode;
+	            state.delayed_notes[r].note.string = chord.note[q].string;
+	            state.delayed_notes[r].time.it_value.tv_sec = chord.note[q].delay / 1000;
+	            state.delayed_notes[r].time.it_value.tv_nsec = (chord.note[q].delay * 1000000) % 1000000000;
+	            state.delayed_notes[r].time.it_interval.tv_sec = 0;
+	            state.delayed_notes[r].time.it_interval.tv_nsec = 0;
 
-	            timer_settime(delayed_notes[r].timer, 0, &(delayed_notes[r].time), NULL);
+	            timer_settime(state.delayed_notes[r].timer, 0, &(state.delayed_notes[r].time), NULL);
 	        }
 	    }
 	}
@@ -490,21 +490,21 @@ void mute(void *port_buf, int i) {
 
     int j;
     for(j=0; j < MAX_DELAYED_NOTES_COUNT; j++){
-        if (delayed_notes[j].note.velocity != 0) {
-            timer_delete(delayed_notes[j].timer);
+        if (state.delayed_notes[j].note.velocity != 0) {
+            timer_delete(state.delayed_notes[j].timer);
         }
-        delayed_notes[j].note.velocity = 0;
+        state.delayed_notes[j].note.velocity = 0;
     }
-    queued_notes.size = 0;
+    state.queued_notes.size = 0;
 
     int sustained_notes_count = 0;
-    while(active_notes.size > sustained_notes_count) {
-        note_midi_channel = active_notes.note[active_notes.size - 1].midi_channel;
+    while(state.active_notes.size > sustained_notes_count) {
+        note_midi_channel = state.active_notes.note[state.active_notes.size - 1].midi_channel;
         buffer = jack_midi_event_reserve(port_buf, use_time, 3);
-        buffer[2] = active_notes.note[active_notes.size - 1].velocity;        /* velocity */
-        buffer[1] = active_notes.note[active_notes.size - 1].note_number;    /* note number */
+        buffer[2] = state.active_notes.note[state.active_notes.size - 1].velocity;        /* velocity */
+        buffer[1] = state.active_notes.note[state.active_notes.size - 1].note_number;    /* note number */
         buffer[0] = MIDI_NOTE_OFF + (note_midi_channel ? note_midi_channel : use_midi_channel) - 1;    /* note off, standard midi channel */
-        active_notes.size--;
+        state.active_notes.size--;
     }
 }
 
@@ -518,7 +518,7 @@ void sendWhammyMessages (int whammy_length, struct scaled_message_t *whammy, voi
 
     for (int i = 0; i < whammy_length; i++) {
 		range = whammy[i].max - whammy[i].min;
-	    shift = (range * whammy_state) / CWIID_GUITAR_WHAMMY_MAX ;
+	    shift = (range * state.whammy) / CWIID_GUITAR_WHAMMY_MAX ;
 	    value = whammy[i].min + shift;
 	    midi_channel = whammy[i].midi_channel == MIDI_DATA_NULL ? use_midi_channel : whammy[i].midi_channel;
 
@@ -529,7 +529,7 @@ void sendWhammyMessages (int whammy_length, struct scaled_message_t *whammy, voi
 			    buffer[2] = (value & 0x3F80) >> 7;  // most significant bits
 			    buffer[1] = value & 0x007f;         // least significant bits
 			    buffer[0] = MIDI_PITCH_WHEEL + midi_channel - 1;    // pitch wheel change 
-		    	printf("whammy pitch: %x, %x, %x, min: %d\tvalue: %d\tmax: %d\twhammy-state: %x\n", buffer[0], buffer[2], buffer[1], whammy[i].min, value, whammy[i].max, whammy_state);
+		    	printf("whammy pitch: %x, %x, %x, min: %d\tvalue: %d\tmax: %d\twhammy-state: %x\n", buffer[0], buffer[2], buffer[1], whammy[i].min, value, whammy[i].max, state.whammy);
 
 		    	break;
 
@@ -561,12 +561,12 @@ void mute_string_notes (void *port_buf, int i) {
 	unsigned char* buffer;
 	int j;
 	for (j = 0; j < MAX_SUSTAIN_STRINGS_COUNT; j++) {
-		if (sustain_string[j].note_number) {
+		if (state.sustain_string[j].note_number) {
 		    buffer = jack_midi_event_reserve(port_buf, i, 3);
-		    buffer[2] = sustain_string[j].velocity;        /* velocity */
-		    buffer[1] = sustain_string[j].note_number;    /* note number */
-		    buffer[0] = MIDI_NOTE_OFF + sustain_string[j].midi_channel - 1;    /* note off */
-			sustain_string[i].note_number = 0;
+		    buffer[2] = state.sustain_string[j].velocity;        /* velocity */
+		    buffer[1] = state.sustain_string[j].note_number;    /* note number */
+		    buffer[0] = MIDI_NOTE_OFF + state.sustain_string[j].midi_channel - 1;    /* note off */
+			state.sustain_string[i].note_number = 0;
 		}
 	}
 }
@@ -580,173 +580,173 @@ int process(jack_nframes_t nframes, void *arg) {
     unsigned char strummer_direction;
 
     for(i = 0; i < nframes; i++) {
-        while(queued_notes.size > 0) {
-            note_on(queued_notes.note[queued_notes.size - 1], port_buf, i);
-            queued_notes.size--;
+        while(state.queued_notes.size > 0) {
+            note_on(state.queued_notes.note[state.queued_notes.size - 1], port_buf, i);
+            state.queued_notes.size--;
         }
-        if (system_action != SYSTEM_ACTION_NONE) {
+        if (state.action.system != SYSTEM_ACTION_NONE) {
 
-            switch (system_action) {
+            switch (state.action.system) {
 
                 case SYSTEM_ACTION_PATCH_INIT:
-                    sendBankProgramChange(midi.bank_msb, midi.bank_lsb, midi.program, port_buf, i);
-                    if (bank[selected_bank].selectable) {
-                        sendBankProgramChange(bank[selected_bank].midi.bank_msb, bank[selected_bank].midi.bank_lsb, bank[selected_bank].midi.program, port_buf, i);
+                    sendBankProgramChange(patch.midi.bank_msb, patch.midi.bank_lsb, patch.midi.program, port_buf, i);
+                    if (bank[state.selected_bank].selectable) {
+                        sendBankProgramChange(bank[state.selected_bank].midi.bank_msb, bank[state.selected_bank].midi.bank_lsb, bank[state.selected_bank].midi.program, port_buf, i);
                     }
-                    if (cc_length > 0) {
-                    	for (j = 0; j < cc_length; j++) {
-	                    	sendCCMessage(cc[j], port_buf, i);
+                    if (patch.cc_length > 0) {
+                    	for (j = 0; j < patch.cc_length; j++) {
+	                    	sendCCMessage(patch.cc[j], port_buf, i);
 	                    }
                     }
-                    if (bank[selected_bank].cc_length > 0) {
-                    	for (j = 0; j < bank[selected_bank].cc_length; j++) {
-                    		sendCCMessage(bank[selected_bank].cc[j], port_buf, i);
+                    if (bank[state.selected_bank].cc_length > 0) {
+                    	for (j = 0; j < bank[state.selected_bank].cc_length; j++) {
+                    		sendCCMessage(bank[state.selected_bank].cc[j], port_buf, i);
                     	}
                     }
                     break;
             }
-            system_action = SYSTEM_ACTION_NONE;
+            state.action.system = SYSTEM_ACTION_NONE;
         }
-        if (strummer_action != STRUMMER_ACTION_NONE) {
-            if (strummer_action == STRUMMER_ACTION_MID_DOWN || strummer_action == STRUMMER_ACTION_MID_UP) {
-            	strummer_direction = (strummer_action == STRUMMER_ACTION_MID_DOWN) ? DOWN : UP;
-            	if(bank[selected_bank].chord[chord_state].size) {
-            		if (chord_state != previous_strummed_chord) {
+        if (state.action.strummer != STRUMMER_ACTION_NONE) {
+            if (state.action.strummer == STRUMMER_ACTION_MID_DOWN || state.action.strummer == STRUMMER_ACTION_MID_UP) {
+            	strummer_direction = (state.action.strummer == STRUMMER_ACTION_MID_DOWN) ? DOWN : UP;
+            	if(bank[state.selected_bank].chord[state.chord].size) {
+            		if (state.chord != state.previous_strummed_chord) {
             			mute_string_notes(port_buf, i);
             		}
-	                strum_chord(bank[selected_bank].chord[chord_state], strummer_direction, port_buf, i);
-	            } else if (bank[selected_bank].sequence[chord_state].length) {
-	            	if (bank[selected_bank].sequence[chord_state].shared_counter != MIDI_DATA_NULL) {
-		            	if (chord_state != previous_strummed_chord) {
-		            		if (bank[selected_bank].sequence[chord_state].reset_shared_counter) {
-		            			bank[selected_bank].counter[bank[selected_bank].sequence[chord_state].shared_counter].position = 0;
+	                strum_chord(bank[state.selected_bank].chord[state.chord], strummer_direction, port_buf, i);
+	            } else if (bank[state.selected_bank].sequence[state.chord].length) {
+	            	if (bank[state.selected_bank].sequence[state.chord].shared_counter != MIDI_DATA_NULL) {
+		            	if (state.chord != state.previous_strummed_chord) {
+		            		if (bank[state.selected_bank].sequence[state.chord].reset_shared_counter) {
+		            			bank[state.selected_bank].counter[bank[state.selected_bank].sequence[state.chord].shared_counter].position = 0;
 		            		}
 		            	} 
-		            	strum_chord(bank[selected_bank].sequence[chord_state].step[(bank[selected_bank].counter[bank[selected_bank].sequence[chord_state].shared_counter].position++) % bank[selected_bank].sequence[chord_state].length], strummer_direction, port_buf, i);
-		            	if (bank[selected_bank].counter[bank[selected_bank].sequence[chord_state].shared_counter].position == bank[selected_bank].counter[bank[selected_bank].sequence[chord_state].shared_counter].length) {
-		            		bank[selected_bank].counter[bank[selected_bank].sequence[chord_state].shared_counter].position = 0;
+		            	strum_chord(bank[state.selected_bank].sequence[state.chord].step[(bank[state.selected_bank].counter[bank[state.selected_bank].sequence[state.chord].shared_counter].position++) % bank[state.selected_bank].sequence[state.chord].length], strummer_direction, port_buf, i);
+		            	if (bank[state.selected_bank].counter[bank[state.selected_bank].sequence[state.chord].shared_counter].position == bank[state.selected_bank].counter[bank[state.selected_bank].sequence[state.chord].shared_counter].length) {
+		            		bank[state.selected_bank].counter[bank[state.selected_bank].sequence[state.chord].shared_counter].position = 0;
 		            	}
 		            } else {
-		            	if (chord_state != previous_strummed_chord) {
-		            		if (!bank[selected_bank].sequence[chord_state].keep_position) {
-		            			bank[selected_bank].sequence[chord_state].position = 0;
+		            	if (state.chord != state.previous_strummed_chord) {
+		            		if (!bank[state.selected_bank].sequence[state.chord].keep_position) {
+		            			bank[state.selected_bank].sequence[state.chord].position = 0;
 		            		}
 		            	}
-		            	strum_chord(bank[selected_bank].sequence[chord_state].step[bank[selected_bank].sequence[chord_state].position++], strummer_direction, port_buf, i);
-		            	if (bank[selected_bank].sequence[chord_state].position == bank[selected_bank].sequence[chord_state].length) {
-		            		bank[selected_bank].sequence[chord_state].position = 0;
+		            	strum_chord(bank[state.selected_bank].sequence[state.chord].step[bank[state.selected_bank].sequence[state.chord].position++], strummer_direction, port_buf, i);
+		            	if (bank[state.selected_bank].sequence[state.chord].position == bank[state.selected_bank].sequence[state.chord].length) {
+		            		bank[state.selected_bank].sequence[state.chord].position = 0;
 		            	}
 		            }
 	            }
-                strummer_action = STRUMMER_ACTION_NONE;
-				previous_strummed_chord = chord_state;
+                state.action.strummer = STRUMMER_ACTION_NONE;
+				state.previous_strummed_chord = state.chord;
             } else {
-                if (strummer_state != STRUMMER_STATE_SUSTAINED) {
+                if (state.strummer != STRUMMER_STATE_SUSTAINED) {
                     mute(port_buf, i);
-                    strummer_action = STRUMMER_ACTION_NONE;
+                    state.action.strummer = STRUMMER_ACTION_NONE;
                 }
             }
         }
 
-        if (whammy_action != WHAMMY_ACTION_NONE) {
-        	if (bank[selected_bank].whammy_length > 0) {
-        		sendWhammyMessages(bank[selected_bank].whammy_length, bank[selected_bank].whammy, port_buf, i);
-        	} else if (whammy_length > 0) {
-        		sendWhammyMessages(whammy_length, whammy, port_buf, i);
+        if (state.action.whammy != WHAMMY_ACTION_NONE) {
+        	if (bank[state.selected_bank].whammy_length > 0) {
+        		sendWhammyMessages(bank[state.selected_bank].whammy_length, bank[state.selected_bank].whammy, port_buf, i);
+        	} else if (patch.whammy_length > 0) {
+        		sendWhammyMessages(patch.whammy_length, patch.whammy, port_buf, i);
         	}
-            whammy_action = WHAMMY_ACTION_NONE;
+            state.action.whammy = WHAMMY_ACTION_NONE;
         }
 
-        if (touchbar_action != TOUCHBAR_ACTION_NONE) {
+        if (state.action.touchbar != TOUCHBAR_ACTION_NONE) {
             buffer = jack_midi_event_reserve(port_buf, i, 3);
 
             // scale input to output values (5th represents maximum possible input value)
-            unsigned int modulation = (MIDI_MODULATION_MAX * touchbar_state) / CWIID_GUITAR_TOUCHBAR_5TH ; 
-            printf("touchbar action! %d, %x, sent %x\n", touchbar_action, touchbar_state, modulation);
+            unsigned int modulation = (MIDI_MODULATION_MAX * state.touchbar) / CWIID_GUITAR_TOUCHBAR_5TH ; 
+            printf("touchbar action! %d, %x, sent %x\n", state.action.touchbar, state.touchbar, modulation);
             buffer[2] = modulation;
             buffer[1] = MIDI_CC_MODULATION_MSB;        // modulation
             buffer[0] = MIDI_CONTROL_CHANGE + use_midi_channel - 1;    // control change 
-            touchbar_action = TOUCHBAR_ACTION_NONE;
+            state.action.touchbar = TOUCHBAR_ACTION_NONE;
         }
-        if (stick_action != STICK_ACTION_NONE) {
-            printf("stick_action!\t");
-            unsigned int volume = last_sent_volume_value;
-            if (stick_action == STICK_ACTION_ROTATE_COUNTER_CLOCKWISE) {
-                volume += stick_zone_average_value / 2 ;
+        if (state.action.stick != STICK_ACTION_NONE) {
+            printf("state.action.stick!\t");
+            unsigned int volume = state.stick.last_sent_value;
+            if (state.action.stick == STICK_ACTION_ROTATE_COUNTER_CLOCKWISE) {
+                volume += state.stick.average_value / 2 ;
                 if (volume > 127) {
                     volume = 127; 
                 }
             }
-            else if (stick_action == STICK_ACTION_ROTATE_CLOCKWISE) {
-                if (volume >= stick_zone_average_value / 2) {
-                    volume -= stick_zone_average_value / 2;
+            else if (state.action.stick == STICK_ACTION_ROTATE_CLOCKWISE) {
+                if (volume >= state.stick.average_value / 2) {
+                    volume -= state.stick.average_value / 2;
                 } else {
                     volume = 0;
                 }
             }
-            if (volume != last_sent_volume_value) {
+            if (volume != state.stick.last_sent_value) {
                 printf("volume: %d\t", volume);
                 buffer = jack_midi_event_reserve(port_buf, i, 3);
                 buffer[2] = volume;
                 buffer[1] = MIDI_CC_VOLUME_MSB;        // volume
                 buffer[0] = MIDI_CONTROL_CHANGE + use_midi_channel - 1;    // control change
-                last_sent_volume_value = volume;
+                state.stick.last_sent_value = volume;
             }
-            stick_action = STICK_ACTION_NONE;
+            state.action.stick = STICK_ACTION_NONE;
             printf("\n");
         }
-        while (drums_action != 0) {
+        while (state.action.drums != 0) {
             uint8_t send_note_off = 0;
             buffer = jack_midi_event_reserve(port_buf, i, 3);
             buffer[2] = 0x7F;        /* velocity */
-            if ((drums_action & RED) == RED) {
-/*                if ((drums_state & RED) == RED) {
+            if ((state.action.drums & RED) == RED) {
+/*                if ((state.drums & RED) == RED) {
                     send_note_off = 1;
                 }
-                drums_state ^= RED;
+                state.drums ^= RED;
 */
                 buffer[1] = 38;    /* note number */
-                drums_action &= ~RED;
-            } else if ((drums_action & YELLOW) == YELLOW) {
-/*                if ((drums_state & YELLOW) == YELLOW) {
+                state.action.drums &= ~RED;
+            } else if ((state.action.drums & YELLOW) == YELLOW) {
+/*                if ((state.drums & YELLOW) == YELLOW) {
                     send_note_off = 1;
                 }
-                drums_state ^= YELLOW;
+                state.drums ^= YELLOW;
 */
                 buffer[1] = 42;    /* note number */
-                drums_action &= ~YELLOW;
-            } else if ((drums_action & BLUE) == BLUE) {
-/*                if ((drums_state & BLUE) == BLUE) {
+                state.action.drums &= ~YELLOW;
+            } else if ((state.action.drums & BLUE) == BLUE) {
+/*                if ((state.drums & BLUE) == BLUE) {
                     send_note_off = 1;
                 }
-                drums_state ^= BLUE;
+                state.drums ^= BLUE;
 */
                 buffer[1] = 48;    /* note number */
-                drums_action &= ~BLUE;
-            } else if ((drums_action & ORANGE) == ORANGE) {
-/*                if ((drums_state & ORANGE) == ORANGE) {
+                state.action.drums &= ~BLUE;
+            } else if ((state.action.drums & ORANGE) == ORANGE) {
+/*                if ((state.drums & ORANGE) == ORANGE) {
                     send_note_off = 1;
                 }
-                drums_state ^= ORANGE;
+                state.drums ^= ORANGE;
 */
                 buffer[1] = 51;    /* note number */
-                drums_action &= ~ORANGE;
-            } else if ((drums_action & GREEN) == GREEN) {
-/*                if ((drums_state & GREEN) == GREEN) {
+                state.action.drums &= ~ORANGE;
+            } else if ((state.action.drums & GREEN) == GREEN) {
+/*                if ((state.drums & GREEN) == GREEN) {
                     send_note_off = 1;
                 }
-                drums_state ^= GREEN;
+                state.drums ^= GREEN;
 */
                 buffer[1] = 45;    /* note number */
-                drums_action &= ~GREEN;
-            } else if ((drums_action & PEDAL) == PEDAL) {
-/*                if ((drums_state & PEDAL) == PEDAL) {
+                state.action.drums &= ~GREEN;
+            } else if ((state.action.drums & PEDAL) == PEDAL) {
+/*                if ((state.drums & PEDAL) == PEDAL) {
                     send_note_off = 1;
                 }
-                drums_state ^= PEDAL;
+                state.drums ^= PEDAL;
 */
                 buffer[1] = 36;    /* note number */
-                drums_action &= ~PEDAL;
+                state.action.drums &= ~PEDAL;
             }
             
             if (send_note_off) {
@@ -756,50 +756,50 @@ int process(jack_nframes_t nframes, void *arg) {
             }
         }
         
-        if (crossfader_action != CROSSFADER_ACTION_NONE) {
+        if (state.action.crossfader != CROSSFADER_ACTION_NONE) {
             buffer = jack_midi_event_reserve(port_buf, i, 3);
-            uint8_t crossfader_midi_value = current_turntables_state.crossfader * 127 / CWIID_TURNTABLES_CROSSFADER_MAX;
+            uint8_t crossfader_midi_value = state.current_turntables_state.crossfader * 127 / CWIID_TURNTABLES_CROSSFADER_MAX;
             buffer[2] = crossfader_midi_value;
             buffer[1] = MIDI_CC_BALANCE_MSB;
             buffer[0] = MIDI_CONTROL_CHANGE + use_midi_channel - 1;    // control change
-            crossfader_action = CROSSFADER_ACTION_NONE;
+            state.action.crossfader = CROSSFADER_ACTION_NONE;
         }
-        if (effect_dial_action != EFFECT_DIAL_ACTION_NONE) {
+        if (state.action.effect_dial != EFFECT_DIAL_ACTION_NONE) {
             buffer = jack_midi_event_reserve(port_buf, i, 3);
             buffer[0] = MIDI_CONTROL_CHANGE + use_midi_channel - 1;    // control change
             buffer[1] = MIDI_CC_EFFECT_CTL_1_MSB;
             int16_t signed_value;
             
-            switch (effect_dial_action) {
+            switch (state.action.effect_dial) {
             case EFFECT_DIAL_ACTION_ROTATE_CLOCKWISE:
-                effect_dial_state.value += effect_dial_state.change;
-                if (effect_dial_state.value > effect_dial_state.max_value) {
-                    effect_dial_state.value = effect_dial_state.max_value;
+                state.effect_dial.value += state.effect_dial.change;
+                if (state.effect_dial.value > state.effect_dial.max_value) {
+                    state.effect_dial.value = state.effect_dial.max_value;
                 }
                 break;
             case EFFECT_DIAL_ACTION_ROTATE_COUNTER_CLOCKWISE:
-                signed_value = effect_dial_state.value + effect_dial_state.change;
-                effect_dial_state.value += effect_dial_state.change;
-                if (signed_value < effect_dial_state.min_value) {
-                    effect_dial_state.value = effect_dial_state.min_value;
+                signed_value = state.effect_dial.value + state.effect_dial.change;
+                state.effect_dial.value += state.effect_dial.change;
+                if (signed_value < state.effect_dial.min_value) {
+                    state.effect_dial.value = state.effect_dial.min_value;
                 }
                 break;
             case EFFECT_DIAL_ACTION_INITIALIZE:
                 printf("initialize\n");
-                current_turntables_state.effect_dial = effect_dial_state.initial_value;
+                state.current_turntables_state.effect_dial = state.effect_dial.initial_value;
                 break;
             }
-            buffer[2] = effect_dial_state.value;
-            effect_dial_action = EFFECT_DIAL_ACTION_NONE;
+            buffer[2] = state.effect_dial.value;
+            state.action.effect_dial = EFFECT_DIAL_ACTION_NONE;
         }
-        if (buttons_action != BUTTONS_ACTION_NONE) {
-            switch (buttons_action) {
+        if (state.action.buttons != BUTTONS_ACTION_NONE) {
+            switch (state.action.buttons) {
                 case BUTTONS_ACTION_BANK_CHANGE:
-                    selectBank(buttons_action_data, port_buf, i);
+                    selectBank(state.action.buttons_data, port_buf, i);
                     break;
             }
-            buttons_action = BUTTONS_ACTION_NONE;
-            buttons_action_data = 0;
+            state.action.buttons = BUTTONS_ACTION_NONE;
+            state.action.buttons_data = 0;
         }
 
     }
@@ -853,7 +853,7 @@ void writeCurrentPatchToFile(const char *file) {
     }
 
     /* Add an attribute with name "velocity" and value chord[i].note.velocity to note. */
-    rc = xmlTextWriterWriteFormatAttribute(writer, BAD_CAST "midi_channel", "%d", midi.channel);
+    rc = xmlTextWriterWriteFormatAttribute(writer, BAD_CAST "midi_channel", "%d", patch.midi.channel);
     if (rc < 0) {
         printf("writeCurrentPatchToFile: Error at xmlTextWriterWriteAttribute\n");
         return;
@@ -1013,9 +1013,9 @@ void freeStateMemory () {
     int delayed_notes_index;
     int active_notes_index;
 
-    free(delayed_notes);
-    free(queued_notes.note);
-    free(active_notes.note);
+    free(state.delayed_notes);
+    free(state.queued_notes.note);
+    free(state.active_notes.note);
 }
 
 void readNote (xmlNode *note_element, struct note_t *noteData) {
@@ -1371,18 +1371,18 @@ void readPatchFromFile (const char *file) {
 
     if (!strcmp(cur->name, "patch")) {
         printf ("patch name: %s\n", xmlGetProp(cur, "name"));
-        readMidiInfo(cur, &midi);
-        printf("midi channel: %d\n", midi.channel);
+        readMidiInfo(cur, &patch.midi);
+        printf("midi channel: %d\n", patch.midi.channel);
         cur = cur->children;
 
         while (cur != NULL) {
         	if (cur->type == XML_ELEMENT_NODE) { 
                 if (!strcmp(cur->name, "cc")) {
-                	cc = readCC(cur, &cc_length);
+                	patch.cc = readCC(cur, &patch.cc_length);
                 }		        	
 
                 if (!strcmp(cur->name, "whammy")) {
-                	whammy = readWhammy(cur, &whammy_length);
+                	patch.whammy = readWhammy(cur, &patch.whammy_length);
                 }
 
 		        if (!strcmp(cur->name, "banks")) {
@@ -1437,7 +1437,7 @@ void readPatchFromFile (const char *file) {
      *have been allocated by the parser.
      */
     xmlCleanupParser();
-    system_action = SYSTEM_ACTION_PATCH_INIT;
+    state.action.system = SYSTEM_ACTION_PATCH_INIT;
 }
 
 
@@ -1451,13 +1451,47 @@ struct sigevent sigev;
 
 
 void init() {
-    system_action = SYSTEM_ACTION_NONE;
-    midi.channel = 0;
-    midi.bank_msb = MIDI_DATA_NULL;
-    midi.bank_lsb = MIDI_DATA_NULL;
-    midi.program = MIDI_DATA_NULL;
-    transpose = 0;
-    last_sent_volume_value = 127;
+    int i;
+    state.action.buttons = BUTTONS_ACTION_NONE;
+    state.action.buttons_data = 0;
+    state.action.drums = 0;
+    state.action.stick = STICK_ACTION_NONE;
+    state.action.strummer = STRUMMER_ACTION_NONE;
+    state.action.system = SYSTEM_ACTION_NONE;
+    state.action.whammy = WHAMMY_ACTION_NONE;
+    state.buttons_previous = 0;
+    state.chord = 0;
+    state.drums = 0;
+    state.drums_buttons_previous = 0;
+    state.previous_strummed_chord = 0xFFFF;
+    state.stick.acc.count = 0;
+    state.stick.acc.value = 0;
+    state.stick.average_value = 0;
+    state.stick.last_sent_value = 127;
+    state.stick.position[CWIID_X] = 0;
+    state.stick.position[CWIID_Y] = 0;
+    state.stick.rotation_ccw_counter = 0;
+    state.stick.rotation_cw_counter = 0;
+    state.stick.zone = STICK_ZONE_UNKNOWN;
+    state.strummer = STRUMMER_STATE_UNKNOWN;
+    state.transpose = 0;
+    state.whammy = WHAMMY_STATE_UNKNOWN;
+
+    state.sustain_string = malloc(MAX_SUSTAIN_STRINGS_COUNT * sizeof(struct note_t));
+    state.delayed_notes = malloc(MAX_DELAYED_NOTES_COUNT * sizeof(struct delayed_note_t));
+    for(i = 0; i < MAX_DELAYED_NOTES_COUNT; i++){
+        state.delayed_notes[i].note.velocity = 0;
+    }
+    state.queued_notes.size = 0;
+    state.queued_notes.note = malloc(MAX_QUEUED_NOTES_COUNT * sizeof(struct note_t));
+    state.active_notes.size = 0;
+    state.active_notes.note = malloc(MAX_ACTIVE_NOTES_COUNT * sizeof(struct note_t));
+
+
+    patch.midi.channel = 0;
+    patch.midi.bank_msb = MIDI_DATA_NULL;
+    patch.midi.bank_lsb = MIDI_DATA_NULL;
+    patch.midi.program = MIDI_DATA_NULL;
 
     margin.it_value.tv_sec = 0;
     margin.it_value.tv_nsec = 50000000;
@@ -1468,16 +1502,7 @@ void init() {
     timer_settime(countdown_id, 0, &margin, NULL);
     timer_gettime(countdown_id, &time_left);
 
-    drums_action = 0;
-    stick_state[CWIID_X] = 0;
-    stick_state[CWIID_Y] = 0;
-    stick_zone_acc.count = 0;
-    stick_zone_acc.value = 0;
-    stick_zone_average_value = 0;
-    stick_zone_rotation_clockwise_counter = 0;
-    stick_zone_rotation_counter_clockwise_counter = 0;
 
-    int i;
     bank = malloc(MAX_BANKS_COUNT * sizeof(struct bank_t));
     for(i = 0; i < MAX_BANKS_COUNT; i++) {
         bank[i].midi.channel = 0;
@@ -1487,35 +1512,10 @@ void init() {
         bank[i].selectable = 0;
     }    
 
-    sustain_string = malloc(MAX_SUSTAIN_STRINGS_COUNT * sizeof(struct note_t));
-    delayed_notes = malloc(MAX_DELAYED_NOTES_COUNT * sizeof(struct delayed_note_t));
-    for(i = 0; i < MAX_DELAYED_NOTES_COUNT; i++){
-        delayed_notes[i].note.velocity = 0;
-    }
-
-    queued_notes.size = 0;
-    queued_notes.note = malloc(MAX_QUEUED_NOTES_COUNT * sizeof(struct note_t));
-
-    active_notes.size = 0;
-    active_notes.note = malloc(MAX_ACTIVE_NOTES_COUNT * sizeof(struct note_t));
-
-    strummer_state = STRUMMER_STATE_UNKNOWN;
-    strummer_action = STRUMMER_ACTION_NONE;
-
-    whammy_action = WHAMMY_ACTION_NONE;
-    whammy_state = WHAMMY_STATE_UNKNOWN;
-
-    stick_action = STICK_ACTION_NONE;
-    stick_zone = STICK_ZONE_UNKNOWN;
-    buttons_action = BUTTONS_ACTION_NONE;
-    buttons_action_data = 0;
-    
-    drums_buttons_previous = 0;
-    
-    effect_dial_action = EFFECT_DIAL_ACTION_INITIALIZE;
-    effect_dial_state.max_value = 127;
-    effect_dial_state.min_value = 0;
-    effect_dial_state.initial_value = 63;
+    state.action.effect_dial = EFFECT_DIAL_ACTION_INITIALIZE;
+    state.effect_dial.max_value = 127;
+    state.effect_dial.min_value = 0;
+    state.effect_dial.initial_value = 63;
 }
 
 void siginthandler(int param) {

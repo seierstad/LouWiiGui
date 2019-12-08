@@ -65,41 +65,41 @@
 #define STICK_ZONE_8(x, y) (STICK_QUARTER_4(x, y) && y <= (CWIID_GUITAR_STICK_MAX - x))
 #define STICK_ROTATION_ZONE_THRESHOLD 5
 
-enum {
+enum strummer_state_t {
 	STRUMMER_STATE_MID,
 	STRUMMER_STATE_DOWN,
 	STRUMMER_STATE_UP,
 	STRUMMER_STATE_SUSTAINED,
 	STRUMMER_STATE_UNKNOWN
-} strummer_states;
+};
 
-enum {
+enum strummer_action_t {
 	STRUMMER_ACTION_NONE,
 	STRUMMER_ACTION_MID_UP,
 	STRUMMER_ACTION_UP_MID,
 	STRUMMER_ACTION_MID_DOWN,
 	STRUMMER_ACTION_DOWN_MID
-} strummer_actions;
+};
 
-enum {
+enum strummer_direction_t {
 	BOTH,
 	UP,
 	DOWN
-} directions;
+};
 
-enum {
+enum sustain_mode_t {
 	SUSTAIN_OFF,      // the note ends when the strummer returns to mid position
 	SUSTAIN_SEQUENCE, // the note ends when the same note is struck on the same midi channel again, or until a different sequence/chord is strummed
 	SUSTAIN_STRING    // the note ends when a new note is triggered on the same string, or when a chord is strummed
-} sustain_modes;
+};
 
-enum {
+enum whammy_action_t {
 	WHAMMY_ACTION_NONE,
 	WHAMMY_ACTION_UP,
 	WHAMMY_ACTION_DOWN
-} whammy_actions;
+};
 
-enum {
+enum touchbar_state_t {
 	TOUCHBAR_STATE_NONE,
 	TOUCHBAR_STATE_1ST,
 	TOUCHBAR_STATE_1ST_AND_2ND,
@@ -110,9 +110,9 @@ enum {
 	TOUCHBAR_STATE_4TH,
 	TOUCHBAR_STATE_4TH_AND_5TH,
 	TOUCHBAR_STATE_5TH
-} touchbar_states;
+};
 
-enum {
+enum touchbar_action_t {
 	TOUCHBAR_ACTION_NONE,
 	TOUCHBAR_ACTION_TAP,
 	TOUCHBAR_ACTION_RELEASE,
@@ -120,7 +120,7 @@ enum {
 	TOUCHBAR_ACTION_PULLOFF,
 	TOUCHBAR_ACTION_SLIDE_UP,
 	TOUCHBAR_ACTION_SLIDE_DOWN
-} touchbar_actions;
+};
 
 enum stick_zone_t {
 	STICK_ZONE_1ST,
@@ -133,43 +133,43 @@ enum stick_zone_t {
 	STICK_ZONE_8TH,
 	STICK_ZONE_CENTER,
 	STICK_ZONE_UNKNOWN
-} stick_zone;
+};
 
 enum stick_action_t {
 	STICK_ACTION_NONE,
 	STICK_ACTION_ROTATE_CLOCKWISE,
 	STICK_ACTION_ROTATE_COUNTER_CLOCKWISE
-} stick_action;
+};
 
 enum turntables_mode_t {
 	TURNTABLE_MODE_PLAY,	// when euphoria button is pressed, G is rewind, R is play, B is fast forward, spin is jog wheel
 	TURNTABLE_MODE_SET_CUE, // when plus buton is pressed, GRB sets cues 1, 2 and 3
 	TURNTABLE_MODE_REMOVE_CUE, // when minus button is pressed, GRB removes cues 1, 2 and 3 
 	TURNTABLE_MODE_TRIGGER_CUE // when no button is pressed, GRB plays from cues 1, 2 and 3
-} turntables_mode;
+};
 
 enum crossfader_action_t {
 	CROSSFADER_ACTION_NONE,
 	CROSSFADER_ACTION_FADE_LEFT,
 	CROSSFADER_ACTION_FADE_RIGHT
-} crossfader_action;
+};
 
 enum effect_dial_action_t {
 	EFFECT_DIAL_ACTION_NONE,
 	EFFECT_DIAL_ACTION_INITIALIZE,
 	EFFECT_DIAL_ACTION_ROTATE_CLOCKWISE,
 	EFFECT_DIAL_ACTION_ROTATE_COUNTER_CLOCKWISE
-} effect_dial_action;
+};
 
 enum buttons_action_t {
 	BUTTONS_ACTION_NONE,
 	BUTTONS_ACTION_BANK_CHANGE
-} buttons_actions;
+};
 
 enum scaled_value_type_t {
 	SCALED_CC,
 	SCALED_PITCH
-} scaled_value_type;
+};
 
 
 struct effect_dial_state_t {
@@ -178,37 +178,15 @@ struct effect_dial_state_t {
 	uint8_t max_value;
 	uint8_t  min_value;
 	uint8_t  initial_value;
-} effect_dial_state;
+};
 
 
 enum system_action_t {
 	SYSTEM_ACTION_NONE,
 	SYSTEM_ACTION_PATCH_INIT,
 	SYSTEM_ACTION_BANK_INIT
-} system_actions;
-
-unsigned char system_action;
-unsigned char touchbar_state;
-unsigned char touchbar_action;
-unsigned char strummer_state;
-unsigned char strummer_action;
-unsigned char whammy_state;
-unsigned char whammy_action;
-unsigned char buttons_action;
-unsigned char buttons_action_data;
-unsigned char stick_state[2];
-unsigned char stick_zone_average_value;
-unsigned char stick_zone_rotation_clockwise_counter;
-unsigned char stick_zone_rotation_counter_clockwise_counter;
-unsigned char last_sent_volume_value;
-
-
-
-struct stick_zone_value_accumulator {
-	unsigned int count;
-	unsigned int value;
 };
-struct stick_zone_value_accumulator stick_zone_acc;
+
 
 struct note_t {
 	unsigned char direction;
@@ -261,6 +239,77 @@ struct counter_t {
 	int position;
 };
 
+struct patch_t {
+	struct midi_info_t midi;
+	int cc_length;
+	struct cc_message_t *cc;
+	int whammy_length;
+	struct scaled_message_t *whammy;
+};
+
+
+// initial attempt to implement delay:
+#define DELAYED_NOTE_TRIGGERED 13
+struct delayed_note_t {
+	struct note_t note;
+	struct itimerspec time;
+	struct sigevent sevent;
+	timer_t timer;
+};
+
+struct value_accumulator {
+	unsigned int count;
+	unsigned int value;
+};
+
+struct stick_state_t {
+	unsigned char position[2];
+	unsigned char average_value;
+	unsigned char rotation_cw_counter;
+	unsigned char rotation_ccw_counter;
+	unsigned char last_sent_value;
+	struct value_accumulator acc;
+	enum stick_zone_t zone;
+};
+
+struct action_t {
+	enum system_action_t system;
+	enum crossfader_action_t crossfader;
+	enum touchbar_action_t touchbar;
+	enum strummer_action_t strummer;
+	unsigned char buttons_data;
+	unsigned char drums;
+	enum stick_action_t stick;
+	enum whammy_action_t whammy;
+	enum buttons_action_t buttons;
+	enum effect_dial_action_t effect_dial;
+};
+
+struct state_t {
+	struct action_t action;
+	// current fret button + drum trigger states
+	enum touchbar_state_t touchbar;
+	unsigned char strummer;
+	unsigned char whammy;
+	unsigned int chord;
+	unsigned int previous_strummed_chord;
+	unsigned int drums;
+	uint8_t drums_buttons_previous;
+	uint16_t buttons_previous;
+	
+	struct stick_state_t stick;
+	struct turntables_state current_turntables_state;
+	struct effect_dial_state_t effect_dial;
+
+	// playing state
+	int8_t transpose;
+	int8_t selected_bank;
+	struct delayed_note_t *delayed_notes;
+	struct note_t *sustain_string;
+	struct chord_t active_notes;
+	struct chord_t queued_notes;
+};
+
 // a bank is a collection of chords and sequences
 struct bank_t {
 	char selectable;
@@ -276,21 +325,9 @@ struct bank_t {
 };
 
 #define MAX_BANKS_COUNT 3
+struct patch_t patch;
 struct bank_t *bank;
-
-
-// current fret button + drum trigger states
-unsigned int chord_state = 0;
-unsigned int previous_strummed_chord = 0xFFFF;
-unsigned int drums_action = 0;
-unsigned int drums_state = 0;
-uint8_t drums_buttons_previous = 0;
-uint16_t buttons_previous = 0;
-
-struct turntables_state current_turntables_state;
-
-struct chord_t active_notes;
-struct chord_t queued_notes;
+struct state_t state;
 
 jack_client_t *client;
 jack_port_t *output_port;
@@ -309,25 +346,3 @@ struct itimerspec time_left;
 
 cwiid_wiimote_t *wiimote;	/* wiimote handle */
 cwiid_mesg_callback_t cwiid_callback;
-
-int cc_length;
-struct cc_message_t *cc;
-struct midi_info_t midi;
-int8_t transpose;
-int8_t selected_bank;
-
-int whammy_length;
-struct scaled_message_t *whammy;
-
-// initial attempt to implement delay:
-#define DELAYED_NOTE_TRIGGERED 13
-struct delayed_note_t {
-	struct note_t note;
-	struct itimerspec time;
-	struct sigevent sevent;
-	timer_t timer;
-};
-
-struct delayed_note_t *delayed_notes;
-
-struct note_t *sustain_string;
