@@ -1,236 +1,354 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
-<patch name="test patch" midi_channel="1" midi_program="3">
-	<cc number_of_messages="3">
+<patch name="test patch" midi_channel="1" midi_program="13">
+	<cc>
 		<message parameter="7" value="48" />
 		<message midi_channel="2" parameter="7" value="46" />
 		<message midi_channel="3" parameter="7" value="44" />
 	</cc>
-	<whammy number_of_messages="4">
+	<whammy>
 		<scaled_message type="pitch" min="8192" max="0" />
 		<scaled_message type="pitch" min="8192" max="0" midi_channel="3" />
 		<scaled_message type="cc"    min="127"  max="60" cc="filter_cutoff" in_min="whammy_min" in_max="whammy_mid" />
 		<scaled_message type="cc"    min="60"  max="127" cc="filter_cutoff" in_min="whammy_mid" in_max="whammy_max" />
-		<scaled_message type="cc"    min="0"  max="16000" cc="1" cc_lsb="33" />
+		<scaled_message type="cc"    min="0"  max="16000" cc="1" cc_lsb="modulation" />
 	</whammy>
-	<touchbar number_of_messages="3">
-		<scaled_message type="pitch" min="8192" max="16192" default="8192" in_min="touch_3rd" in_max="touch_4th_5th" />
-		<scaled_message type="pitch" min="8192" max="0" midi_channel="3" />
-		<scaled_message type="cc"    min="127"  max="0" in_min="8" in_max="18" cc="74" />
-	</touchbar>
 	<banks>
-		<bank name="intro" midi_channel="1" midi_program="2">
-			<cc number_of_messages="1">
-				<message parameter="7" value="10" />
+		<bank name="intro" midi_channel="1" midi_program="13">
+			<whammy>
+				<scaled_message type="pitch" min="8192" max="0" />
+				<scaled_message type="cc"    min="127"  max="60" cc="filter_cutoff" in_min="whammy_min" in_max="whammy_mid" />
+				<scaled_message type="cc"    min="60"  max="127" cc="filter_cutoff" in_min="whammy_mid" in_max="whammy_max" />
+				<scaled_message type="cc"    min="0"  max="16000" cc="modulation" cc_lsb="modulation_lsb" />
+			</whammy>
+			<touchbar>
+				<scaled_message type="pitch" min="8192" max="16192" default="8192" in_min="touch_3rd" in_max="touch_4th_5th" />
+				<scaled_message type="pitch" min="8192" max="0" midi_channel="3" />
+				<scaled_message type="cc"    min="127"  max="0" in_min="8" in_max="18" cc="74" />
+			</touchbar>
+			<cc>
+				<message parameter="7" value="127" />
 			</cc>
 			<chords>
-				<chord number_of_notes="3">
+				<chord>
 					<note note_number="55" velocity="100" />
 					<note note_number="62" velocity="110" />
-					<note note_number="67" velocity="110" />
+					<note note_number="67" velocity="110" string="1" />
+					<cc>
+						<before_strum />
+						<after_strum>
+							<message parameter="legato_pedal" value="pedal_on" />
+						</after_strum>
+						<before_mute>
+							<message parameter="legato_pedal" value="pedal_on" />
+						</before_mute>
+					</cc>
+					<variations>
+						<chord green="true">
+							<note note_number="68" velocity="110" string="1" />
+						</chord>
+						<chord red="true">
+							<note note_number="69" velocity="110" string="1" />
+						</chord>
+						<chord green="true" red="true">
+							<note note_number="72" velocity="110" string="1" />
+						</chord>
+					</variations>
 				</chord>
 				
-				<chord green="true" number_of_notes="2" name="single note E">
+				<chord green="true" name="single note E">
 					<note note_number="28" velocity="100" midi_channel="3" />
 					<note note_number="40" velocity="127" />
 				</chord>
-				<chord green="true" red="true" number_of_notes="3">
+				<chord green="true" red="true">
 					<note note_number="40" velocity="100" />
 					<note note_number="47" velocity="110" />
 					<note note_number="52" velocity="110" />
 				</chord>
-				<chord green="true" yellow="true" number_of_notes="3">
+				<chord green="true" yellow="true">
 					<note note_number="40" velocity="100" />
 					<note note_number="49" velocity="110" />
 					<note note_number="52" velocity="110" />
 				</chord>
-				<chord green="true" blue="true" number_of_notes="3">
+				<chord green="true" blue="true">
 					<note note_number="40" velocity="100" />
 					<note note_number="50" velocity="110" />
 					<note note_number="52" velocity="110" />
 				</chord>
-				<chord green="true" red="true" yellow="true" number_of_notes="4" name="Em">
+				<chord green="true" red="true" yellow="true" name="Em">
 					<note note_number="40" velocity="100" />
 					<note note_number="47" velocity="110" delay="10"/>
 					<note note_number="52" velocity="110" delay="30"/>
 					<note note_number="55" velocity="110" delay="35"/>
 				</chord>
-				<chord green="true" red="true" blue="true" number_of_notes="4" name="E">
+				<chord green="true" red="true" blue="true" name="E">
 					<note note_number="40" velocity="100" />
 					<note note_number="47" velocity="110" delay="10"/>
 					<note note_number="52" velocity="110" delay="30"/>
 					<note note_number="56" velocity="110" delay="35"/>
 		    	</chord>
-		  		<chord green="true" red="true" orange="true" number_of_notes="4" name="Eadd9">
+		  		<chord green="true" red="true" orange="true" name="Eadd9">
 					<note note_number="40" velocity="100" />
 					<note note_number="47" velocity="110" delay="10"/>
 					<note note_number="52" velocity="110" delay="30"/>
 					<note note_number="54" velocity="110" delay="35"/>
 				</chord>
-		  		<chord green="true" red="true" blue="true" orange="true" number_of_notes="4" name="Esus4">
+		  		<chord green="true" red="true" blue="true" orange="true" name="Esus4">
 					<note note_number="40" velocity="100" />
 					<note note_number="47" velocity="110" delay="10"/>
 					<note note_number="52" velocity="110" delay="30"/>
 					<note note_number="57" velocity="110" delay="35"/>
 		    	</chord>
-				<chord green="true" red="true" yellow="true" blue="true" number_of_notes="5" name="Em7">
+				<chord green="true" red="true" yellow="true" blue="true" name="Em7">
 					<note note_number="40" velocity="100" />
 					<note note_number="47" velocity="110" delay="10"/>
 					<note note_number="52" velocity="110" delay="30"/>
 					<note note_number="55" velocity="110" delay="35"/>
 					<note note_number="62" velocity="110" delay="40"/>
 				</chord>
-				<chord green="true" red="true" yellow="true" orange="true" number_of_notes="5" name="EmMaj7">
+				<chord green="true" red="true" yellow="true" orange="true" name="EmMaj7">
 					<note note_number="40" velocity="100" />
 					<note note_number="47" velocity="110" delay="10"/>
 					<note note_number="52" velocity="110" delay="30"/>
 					<note note_number="55" velocity="110" delay="35"/>
 					<note note_number="63" velocity="110" delay="40"/>
 				</chord>
-				<chord green="true" yellow="true" blue="true" number_of_notes="5" name="E7">
+				<chord green="true" yellow="true" blue="true" name="E7">
 					<note note_number="40" velocity="100" />
 					<note note_number="47" velocity="110" delay="10"/>
 					<note note_number="52" velocity="110" delay="30"/>
 					<note note_number="56" velocity="110" delay="35"/>
 					<note note_number="62" velocity="110" delay="40"/>
 				</chord>
-				<chord green="true" yellow="true" orange="true" number_of_notes="5" name="EMaj7">
+				<chord green="true" yellow="true" orange="true" name="EMaj7">
 					<note note_number="40" velocity="100" />
 					<note note_number="47" velocity="110" delay="10"/>
 					<note note_number="52" velocity="110" delay="30"/>
 					<note note_number="56" velocity="110" delay="35"/>
 					<note note_number="63" velocity="110" delay="40"/>
 				</chord>
-		  		<chord green="true" red="true" yellow="true" blue="true" orange="true" number_of_notes="5" name="Em9">
+		  		<chord green="true" red="true" yellow="true" blue="true" orange="true" name="Em9">
 					<note note_number="40" velocity="100" />
 					<note note_number="43" velocity="110" delay="7" />
 					<note note_number="50" velocity="110" delay="12" />
 					<note note_number="54" velocity="110" delay="20" />
 		      		<note note_number="59" velocity="110" delay="24" />
 				</chord>
-		  		<chord green="true" red="true" yellow="true" blue="true" orange="true" number_of_notes="5" name="E9">
+		  		<chord green="true" red="true" yellow="true" blue="true" orange="true" name="E9">
 					<note note_number="40" velocity="100" />
 					<note note_number="44" velocity="110" delay="7" />
 					<note note_number="50" velocity="110" delay="12" />
 					<note note_number="54" velocity="110" delay="17" />
 		      		<note note_number="59" velocity="110" delay="22" />
 				</chord>
-				<chord red="true" number_of_notes="1" name="single note A">
+				<chord red="true" name="single note A">
 					<note note_number="45" velocity="127" />
 				</chord>
-				<chord red="true" yellow="true" number_of_notes="3">
+				<chord red="true" yellow="true">
 					<note note_number="45" velocity="100" />
 					<note note_number="52" velocity="110" />
 					<note note_number="57" velocity="110" />
 				</chord>
-				<chord red="true" blue="true" number_of_notes="3">
+				<chord red="true" blue="true">
 					<note note_number="45" velocity="100" />
 					<note note_number="54" velocity="110" />
 					<note note_number="57" velocity="110" />
 				</chord>
-				<chord red="true" orange="true" number_of_notes="3">
+				<chord red="true" orange="true">
 					<note note_number="45" velocity="100" />
 					<note note_number="55" velocity="110" />
 					<note note_number="57" velocity="110" />
 				</chord>
-		  		<chord red="true" yellow="true" blue="true" number_of_notes="4" name="Am">
+		  		<chord red="true" yellow="true" blue="true" name="Am">
 					<note note_number="45" velocity="100" />
 					<note note_number="52" velocity="110" delay="7"/>
 					<note note_number="57" velocity="110" delay="12"/>
 					<note note_number="60" velocity="110" />
 				</chord>
-				<chord red="true" yellow="true" orange="true" number_of_notes="4" name="A">
+				<chord red="true" yellow="true" orange="true" name="A">
 					<note note_number="45" velocity="100" />
 					<note note_number="52" velocity="110" />
 					<note note_number="57" velocity="110" />
 					<note note_number="61" velocity="110" />
 				</chord>
-			  	<chord red="true" yellow="true" blue="true" orange="true" number_of_notes="5" name="Am7">
+			  	<chord red="true" yellow="true" blue="true" orange="true" name="Am7">
 					<note note_number="45" velocity="100" />
 					<note note_number="52" velocity="110" delay="7"/>
 					<note note_number="57" velocity="110" delay="12"/>
 					<note note_number="60" velocity="110" />
 		      		<note note_number="67" velocity="110" />
 				</chord>
-		  		<chord red="true" blue="true" orange="true" number_of_notes="5" name="A7">
+		  		<chord red="true" blue="true" orange="true" name="A7">
 					<note note_number="45" velocity="100" />
 					<note note_number="52" velocity="110" delay="7"/>
 					<note note_number="57" velocity="110" delay="12"/>
 					<note note_number="61" velocity="110" />
 		      		<note note_number="67" velocity="110" />
 				</chord>
-				<chord yellow="true" number_of_notes="1">
+				<chord yellow="true">
 					<note note_number="47" velocity="127" />
 				</chord>
-				<chord yellow="true" blue="true" number_of_notes="3">
+				<chord yellow="true" blue="true">
 					<note note_number="47" velocity="100" />
 					<note note_number="54" velocity="110" />
 					<note note_number="59" velocity="110" />
 				</chord>
-				<chord yellow="true" orange="true" number_of_notes="3">
+				<chord yellow="true" orange="true">
 					<note note_number="47" velocity="100" />
 					<note note_number="56" velocity="110" />
 					<note note_number="59" velocity="110" />
 				</chord>
-				<chord blue="true" number_of_notes="1">
+				<chord blue="true">
 					<note note_number="55" velocity="127" />
 				</chord>
-				<chord blue="true" orange="true" number_of_notes="3">
+				<chord blue="true" orange="true">
 					<note note_number="62" velocity="100" />
 					<note note_number="69" velocity="110" />
 					<note note_number="74" velocity="110" />
 				</chord>
-				<chord orange="true" number_of_notes="2">
+				<chord orange="true">
 					<note note_number="56" velocity="127" />
 					<note note_number="32" velocity="127" midi_channel="2" />
 				</chord>
 			</chords>
 		</bank>
-		<bank name="verse">
-			<sequence_counters number_of_counters="2">
+		<bank name="Thunderstruck">
+			<sequence_counters>
 				<counter length="5" />
 				<counter length="3" />
 			</sequence_counters>
 			<chords>
-				<chord green="true" number_of_notes="2" name="single note E">
-					<note note_number="28" velocity="100" midi_channel="3" />
-					<note note_number="66" velocity="127" />
+				<chord name="tapping intro">
+					<note note_number="47" velocity="100" midi_channel="3" string="1" />
+					<note note_number="59" velocity="100" string="2" />
+					<variations>
+						<chord green="true">
+							<note note_number="59" velocity="100" string="2" />
+						</chord>
+						<chord red="true">
+							<note note_number="63" velocity="100" string="2" />
+						</chord>
+						<chord blue="true">
+							<note note_number="66" velocity="100" string="2" />
+						</chord>
+						<chord yellow="true">
+							<note note_number="64" velocity="100" string="2" />
+						</chord>
+						<chord orange="true">
+							<note note_number="67" velocity="100" string="2" />
+						</chord>
+						<chord green="true" orange="true">
+							<note note_number="47" velocity="100" midi_channel="3" string="1" />
+							<note note_number="71" velocity="100" string="2" />
+						</chord>
+						<chord green="true" blue="true">
+							<note note_number="69" velocity="100" string="2" />
+						</chord>
+						<chord green="true" yellow="true">
+							<note note_number="68" velocity="100" string="2" />
+						</chord>
+						<chord green="true" red="true">
+							<note note_number="66" velocity="100" string="2" />
+						</chord>
+					</variations>
+				</chord>
+				<chord green="true" name="tapping intro w/bass+chords">
+					<note note_number="59" velocity="100" string="2" />
+					<variations>
+						<chord>
+							<note note_number="47" velocity="100" midi_channel="3" string="1" />
+							<note note_number="47" velocity="110" string="3" />
+							<note note_number="54" velocity="110" string="4" />
+							<note note_number="59" velocity="100" string="5" />
+
+							<note note_number="59" velocity="100" string="2" />
+						</chord>
+						<chord red="true">
+							<note note_number="63" velocity="100" string="2" />
+						</chord>
+						<chord blue="true">
+							<note note_number="66" velocity="100" string="2" />
+						</chord>
+						<chord yellow="true">
+							<note note_number="64" velocity="100" string="2" />
+						</chord>
+						<chord orange="true">
+							<note note_number="67" velocity="100" string="2" />
+						</chord>
+						<chord green="true" orange="true">
+							<note note_number="47" velocity="100" midi_channel="3" string="1" />
+							<note note_number="47" velocity="110" string="3" />
+							<note note_number="54" velocity="110" string="4" />
+							<note note_number="59" velocity="100" string="5" />
+
+							<note note_number="71" velocity="100" string="2" />
+						</chord>
+						<chord green="true" blue="true">
+							<note note_number="69" velocity="100" string="2" />
+						</chord>
+						<chord green="true" yellow="true">
+							<note note_number="47" velocity="100" midi_channel="3" string="1" />
+							<note note_number="47" velocity="110" string="3" />
+							<note note_number="54" velocity="110" string="4" />
+							<note note_number="59" velocity="100" string="5" />
+
+							<note note_number="68" velocity="100" string="2" />
+						</chord>
+						<chord green="true" red="true">
+							<note note_number="66" velocity="100" string="2" />
+						</chord>
+					</variations>
+				</chord>
+				<chord red="true" yellow="true" blue="true" name="B power chord">
+					<note note_number="47" velocity="110" />
+					<note note_number="54" velocity="110" />
+					<note note_number="59" velocity="110" />
+				</chord>
+				<chord red="true" blue="true" name="A power chord">
+					<note note_number="45" velocity="110" />
+					<note note_number="52" velocity="110" />
+					<note note_number="57" velocity="110" />
+				</chord>
+				<chord green="true" yellow="true" name="E power chord">
+					<note note_number="40" velocity="110" />
+					<note note_number="47" velocity="110" />
+					<note note_number="52" velocity="110" />
 				</chord>
 			</chords>
 		</bank>
 		<bank name="chorus" midi_program="10">
-			<touchbar number_of_messages="1">
+			<touchbar>
 				<scaled_message type="cc" cc="resonance" min="127" max="127" in_min="touch_3rd" in_max="touch_3rd" />
 			</touchbar>
-			<cc number_of_messages="2">
+			<cc>
 				<message parameter="80" value="2" />
 				<message parameter="71" value="110" />
 			</cc>
 			<chords>
-				<chord number_of_notes="2" name="single note E">
+				<chord name="single note E">
 					<note note_number="28" velocity="100" midi_channel="3" />
-					<note note_number="77" velocity="127" />
+					<note note_number="76" velocity="127" />
 				</chord>
-				<chord green="true" red="true" yellow="true" number_of_notes="5" name="E major">
+				<chord green="true" red="true" yellow="true" name="E major">
 					<note note_number="52" velocity="127" direction="up" midi_channel="3" />
 					<note note_number="71" velocity="100" direction="down" />
 					<note note_number="76" velocity="127" direction="down" />
 					<note note_number="80" velocity="100" direction="down" />
 					<note note_number="83" velocity="127" direction="down" />
 				</chord>
-				<chord red="true" yellow="true" number_of_notes="1" name="G# bass note">
+				<chord red="true" yellow="true" name="G# bass note">
 					<note note_number="56" velocity="127" direction="down" midi_channel="3" />
 				</chord>				
-				<chord red="true" yellow="true" blue="true" number_of_notes="5" name="A major">
+				<chord red="true" yellow="true" blue="true" name="A major">
 					<note note_number="57" velocity="127" direction="up" midi_channel="3" />
 					<note note_number="69" velocity="100" direction="down" />
 					<note note_number="76" velocity="127" direction="down" />
 					<note note_number="81" velocity="100" direction="down" />
 					<note note_number="85" velocity="127" direction="down" />
 				</chord>
-				<chord red="true" yellow="true" blue="true" orange="true" number_of_notes="1" name="A# bass note">
+				<chord red="true" yellow="true" blue="true" orange="true" name="A# bass note">
 					<note note_number="58" velocity="127" direction="down" midi_channel="3" />
 				</chord>
-				<chord yellow="true" blue="true" orange="true" number_of_notes="5" name="B major">
+				<chord yellow="true" blue="true" orange="true" name="B major">
 					<note note_number="59" velocity="127" direction="up" midi_channel="3" />
 					<note note_number="71" velocity="100" direction="down" />
 					<note note_number="78" velocity="127" direction="down" />
@@ -238,64 +356,64 @@
 					<note note_number="87" velocity="127" direction="down" />
 				</chord>
 			</chords>
-			<sequence_counters number_of_counters="2">
+			<sequence_counters>
 				<counter length="8" />
 				<counter length="9" />
 			</sequence_counters>
 			<sequences>
-				<sequence green="true" orange="true" number_of_steps="3" shared_counter="0" reset_shared_counter="true">
-					<chord number_of_notes="1">
+				<sequence green="true" orange="true" shared_counter="0" reset_shared_counter="true">
+					<chord>
 						<note note_number="83" velocity="100" sustain="string" string="1" />
 					</chord>
-					<chord number_of_notes="1">
+					<chord>
 						<note note_number="88" velocity="124" sustain="string" string="2" />
 					</chord>
-					<chord number_of_notes="1">
-						<note note_number="87" velocity="45" sustain="string" string="3" />
+					<chord>
+						<note note_number="87" velocity="95" sustain="string" string="3" />
 					</chord>
 				</sequence>
-				<sequence green="true" blue="true" number_of_steps="3" shared_counter="0" reset_shared_counter="true">
-					<chord number_of_notes="1">
+				<sequence green="true" blue="true" shared_counter="0" reset_shared_counter="true">
+					<chord>
 						<note note_number="81" velocity="100" sustain="string" string="1" />
 					</chord>
-					<chord number_of_notes="1">
+					<chord>
 						<note note_number="88" velocity="124" sustain="string" string="2" />
 					</chord>
-					<chord number_of_notes="1">
-						<note note_number="86" velocity="45" sustain="string" string="3" />
+					<chord>
+						<note note_number="86" velocity="95" sustain="string" string="3" />
 					</chord>
 				</sequence>
-				<sequence green="true" red="true" number_of_steps="3" shared_counter="0" reset_shared_counter="true">
-					<chord number_of_notes="1">
+				<sequence green="true" red="true" shared_counter="0" reset_shared_counter="true">
+					<chord>
 						<note note_number="79" velocity="100" sustain="string" string="1" />
 					</chord>
-					<chord number_of_notes="1">
+					<chord>
 						<note note_number="88" velocity="124" sustain="string" string="2" />
 					</chord>
-					<chord number_of_notes="1">
-						<note note_number="86" velocity="45" sustain="string" string="3" />
+					<chord>
+						<note note_number="86" velocity="95" sustain="string" string="3" />
 					</chord>
 				</sequence>
-				<sequence green="true" yellow="true" number_of_steps="3" shared_counter="0" reset_shared_counter="true">
-					<chord number_of_notes="1">
+				<sequence green="true" yellow="true" shared_counter="0" reset_shared_counter="true">
+					<chord>
 						<note note_number="81" velocity="100" sustain="string" string="1" />
 					</chord>
-					<chord number_of_notes="1">
+					<chord>
 						<note note_number="88" velocity="124" sustain="string" string="2" />
 					</chord>
-					<chord number_of_notes="1">
-						<note note_number="85" velocity="45" sustain="string" string="3" />
+					<chord>
+						<note note_number="85" velocity="95" sustain="string" string="3" />
 					</chord>
 				</sequence>
-				<sequence green="true" number_of_steps="3" shared_counter="0" reset_shared_counter="true">
-					<chord number_of_notes="1">
+				<sequence green="true" shared_counter="0" reset_shared_counter="true">
+					<chord>
 						<note note_number="76" velocity="100" sustain="string" string="1" />
 					</chord>
-					<chord number_of_notes="1">
+					<chord>
 						<note note_number="83" velocity="124" sustain="string" string="2" />
 					</chord>
-					<chord number_of_notes="1">
-						<note note_number="79" velocity="45" sustain="string" string="3" />
+					<chord>
+						<note note_number="79" velocity="95" sustain="string" string="3" />
 					</chord>
 				</sequence>
 			</sequences>

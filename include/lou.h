@@ -8,10 +8,10 @@
 #define MIDI_CC2_MAX         0x3FFF
 #define MIDI_CC2_MID         0x2000
 #define MIDI_CC2_MIN         0x0000
+#define MIDI_PEDAL_ON		 0x7F
+#define MIDI_PEDAL_OFF		 0x00
 
-#define MIDI_DATA_NULL       0xFFFF   
-
-
+#define MIDI_DATA_NULL       0xFFFF
 
 #define MIDI_NOTE_OFF       0x80
 #define MIDI_NOTE_ON        0x90
@@ -51,6 +51,11 @@
 #define MIDI_CC_GENERAL_CTL_3_LSB   0x32
 #define MIDI_CC_GENERAL_CTL_4_MSB   0x13
 #define MIDI_CC_GENERAL_CTL_4_LSB   0x33
+#define MIDI_CC_SUSTAIN_PEDAL       0x40
+#define MIDI_CC_PORTAMENTO_PEDAL    0x41
+#define MIDI_CC_SOSTENUTO_PEDAL     0x42
+#define MIDI_CC_SOFT_PEDAL          0x43
+#define MIDI_CC_LEGATO_PEDAL        0x44
 #define MIDI_CC_SOUND_VARIATION     0x46
 #define MIDI_CC_RESONANCE           0x47
 #define MIDI_CC_RELEASE_TIME        0x48
@@ -61,6 +66,7 @@
 #define MAX_QUEUED_NOTES_COUNT   120
 #define MAX_DELAYED_NOTES_COUNT  120
 #define MAX_SUSTAIN_STRINGS_COUNT 12
+#define STRINGS_COUNT 12
 
 // flags for chord selection / drums status
 #define NONE   0x00
@@ -71,7 +77,7 @@
 #define ORANGE 0x10
 #define ALL_COLOR_COMBINATIONS (GREEN | RED | YELLOW | BLUE | ORANGE) + 1
 #define PEDAL  0x20
-
+#define NO_CHORD 0xFF
 
 #define WHAMMY_STATE_UNKNOWN 0xFF
 #define TOUCHBAR_UNTOUCHED 0x0F
@@ -94,6 +100,8 @@
 #define STICK_ZONE_7(x, y) (STICK_QUARTER_4(x, y) && y > (CWIID_GUITAR_STICK_MAX - x))
 #define STICK_ZONE_8(x, y) (STICK_QUARTER_4(x, y) && y <= (CWIID_GUITAR_STICK_MAX - x))
 #define STICK_ROTATION_ZONE_THRESHOLD 5
+
+
 
 enum strummer_state_t {
 	STRUMMER_STATE_MID,
@@ -219,6 +227,10 @@ enum system_action_t {
 	SYSTEM_ACTION_BANK_INIT
 };
 
+enum neck_action_t {
+	NECK_ACTION_NONE,
+	NECK_ACTION_CHANGE
+};
 
 struct note_t {
 	unsigned char direction;
@@ -227,19 +239,25 @@ struct note_t {
 	unsigned int delay;  // used for strumming patterns (not implemented yet)
 	unsigned int midi_channel;
 	unsigned char sustain_mode;
-	unsigned char string;
+	int string;
 };
 
+
+
 struct chord_t {
-	struct note_t * note;
+	uint8_t frets;
 	int size;
+	struct note_t * note;
 	int touchbar_length;
 	struct scaled_message_t *touchbar;
+	unsigned char variation_count;
+	struct chord_t* variation;
 };
 
 struct sequence_t {
-	struct chord_t* step;
+	uint32_t frets;
 	int length;
+	struct chord_t* step;
 	unsigned char keep_position;
 	unsigned char position;
 	int shared_counter;
@@ -315,6 +333,7 @@ struct stick_state_t {
 };
 
 struct action_t {
+	enum neck_action_t neck;
 	enum system_action_t system;
 	enum crossfader_action_t crossfader;
 	enum touchbar_action_t touchbar;
@@ -338,6 +357,7 @@ struct state_t {
 	unsigned int drums;
 	uint8_t drums_buttons_previous;
 	uint16_t buttons_previous;
+	struct chord_t* active_chord;
 	
 	struct stick_state_t stick;
 	struct turntables_state current_turntables_state;
@@ -348,6 +368,7 @@ struct state_t {
 	int8_t selected_bank;
 	struct delayed_note_t *delayed_notes;
 	struct note_t *sustain_string;
+	struct note_t *string;
 	struct chord_t active_notes;
 	struct chord_t queued_notes;
 };
@@ -356,11 +377,13 @@ struct state_t {
 struct bank_t {
 	char selectable;
 	struct midi_info_t midi;
-	struct chord_t chord[ALL_COLOR_COMBINATIONS];
-	struct sequence_t sequence[ALL_COLOR_COMBINATIONS];
+	struct chord_t *chord;
+	unsigned char chord_count;
+	struct sequence_t *sequence;
+	unsigned char sequence_count;
 	int cc_length;
 	struct cc_message_t *cc;
-	int whammy_length;
+	unsigned int whammy_length;
 	struct scaled_message_t *whammy;
 	int touchbar_length;
 	struct scaled_message_t *touchbar;
@@ -372,6 +395,7 @@ struct bank_t {
 struct patch_t patch;
 struct bank_t *bank;
 struct state_t state;
+struct chord_t empty_chord;
 
 jack_client_t *client;
 jack_port_t *output_port;
