@@ -421,7 +421,6 @@ void err(cwiid_wiimote_t *wiimote, const char *s, va_list ap) {
 void note_on (struct note_t note, void* port_buf, int i) {
     unsigned char* buffer;
     int use_midi_channel = note.midi_channel ? note.midi_channel : USE_MIDI_CHANNEL;
-    printf("note.string: %d\n", note.string);
     struct note_t current_note;
     current_note.velocity = note.velocity;
     current_note.note_number = note.note_number + state.transpose;
@@ -504,10 +503,8 @@ void strum_chord (struct chord_t chord, unsigned char direction, void* port_buf,
 
 void strum_chord_stringed_notes_only (struct chord_t chord, void* port_buf, int i) {
     int q,r = 0;
-    printf("stringed notes only!!!\n\n");
     for (q = 0; q < chord.size; q++) {
         if (chord.note[q].string != 0 && state.string[chord.note[q].string].velocity != 0) {
-            printf("har streng");
             note_on(chord.note[q], port_buf, i);
         }
     }
@@ -712,7 +709,6 @@ int process(jack_nframes_t nframes, void *arg) {
 
 
         if (state.action.neck != NECK_ACTION_NONE) {
-            printf("fret action\n");
             switch (state.action.neck) {
                 case NECK_ACTION_CHANGE:
 
@@ -722,7 +718,6 @@ int process(jack_nframes_t nframes, void *arg) {
                         } else {
                             for (int v = 0; v < (*state.active_chord).variation_count; v++) {
                                 if ((*state.active_chord).variation[v].frets == state.chord) {
-                                    printf(" varianten finnes chord: %d\tvariation: %d\n", (*state.active_chord).frets, state.chord);
                                     strum_chord((*state.active_chord).variation[v], BOTH, port_buf, i);
                                     break;
                                 }
@@ -1212,7 +1207,6 @@ void readNote (xmlNode *note_element, struct note_t *noteData) {
         printf("\tstring: %d", string);
     }
     (*noteData).string = string;
-    printf("string: %d\n", (*noteData).string);
 
     if (xmlGetProp(note_element, "sustain")) {
         sscanf(xmlGetProp(note_element, "sustain"), "%s", sustainString);
@@ -1220,8 +1214,6 @@ void readNote (xmlNode *note_element, struct note_t *noteData) {
     }
     if (strcmp(sustainString, "string") == 0) {
   		(*noteData).sustain_mode = SUSTAIN_STRING;
-
-
   	} else if (strcmp(sustainString, "sequence") == 0) {
 	  	(*noteData).sustain_mode = SUSTAIN_SEQUENCE;
 	} else {
@@ -1231,9 +1223,9 @@ void readNote (xmlNode *note_element, struct note_t *noteData) {
 
     if (xmlGetProp(note_element, "delay")) {
         sscanf(xmlGetProp(note_element, "delay"), "%d", &delay);
+        printf("\tdelay: %d", delay);
     }
     (*noteData).delay = delay;
-    printf("\tdelay: %d", delay);
 
     if (xmlGetProp(note_element, "midi_channel")) {
         sscanf(xmlGetProp(note_element, "midi_channel"), "%d", &midi_channel);
@@ -1660,6 +1652,7 @@ void readChord(xmlNode* chordNode, struct chord_t *chord) {
 
     (*chord).frets = getFretStatus(chordNode);
     (*chord).size = (unsigned int)xmlChildElementCount(chordNode);
+    (*chord).variation_count = 0;
     (*chord).note = malloc((*chord).size * sizeof(struct note_t));
     /* a little unused memory (1x sizeof struct note_t) will be allocated when the chord has variations */
 
@@ -1726,7 +1719,7 @@ struct sequence_t readSequence (xmlNode *sequenceNode, struct sequence_t *sequen
     step_element = sequenceNode->children;
     while (step_element != NULL && step_index < (*sequence).length) {
         if (step_element->type == XML_ELEMENT_NODE) {
-            printf("step %d\n", step_index);
+            printf("step %d:\n", step_index);
             readChord(step_element, &(*sequence).step[step_index]);
             step_index++;
         }
@@ -2002,7 +1995,6 @@ int main(int argc, char *argv[]) {
     } else {
         readPatchFromFile("testIn.xml");
     }
-    fprintf(stderr, "VIDERE I main() ETTER LESING!!!\n");
     writeCurrentPatchToFile("testOut.xml");
     cwiid_set_err(err);
 
