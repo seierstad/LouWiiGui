@@ -101,13 +101,24 @@
 		<xsd:attribute name="length" type="xsd:nonNegativeInteger" use="required" />
 	</xsd:complexType>
 
+	<xsd:complexType name="midiProgramType">
+		<xsd:attribute name="channel" type="xsd:nonNegativeInteger" use="required" />
+		<xsd:attribute name="program" type="xsd:nonNegativeInteger" use="required" />
+		<xsd:attribute name="bank_msb" type="xsd:nonNegativeInteger" use="optional" />
+		<xsd:attribute name="bank_lsb" type="xsd:nonNegativeInteger" use="optional" />
+	</xsd:complexType>
+
+	<xsd:complexType name="midiConfigurationType">
+		<xsd:attribute name="default_channel"  type="xsd:nonNegativeInteger" use="optional" />
+		<xsd:sequence>
+			<xsd:element name="midi_program" type="midiProgramType" maxOccurs="unbounded" />
+		</xsd:sequence>
+	</xsd:complexType>
+
 	<xsd:complexType name="BankType">
 		<xsd:attribute name="name" type="xsd:string" use="optional" />
-		<xsd:attribute name="midi_channel"  type="xsd:nonNegativeInteger" use="optional" />
-		<xsd:attribute name="midi_bank_msb" type="xsd:nonNegativeInteger" use="optional" />
-		<xsd:attribute name="midi_bank_lsb" type="xsd:nonNegativeInteger" use="optional" />
-		<xsd:attribute name="midi_program"  type="xsd:nonNegativeInteger" use="optional" />
 
+		<xsd:element name="midi_configuration" type="midiConfigurationType" minOccurs="0" maxOccurs="unbound" />
 		<xsd:element name="cc" type="ccMessagesType" minOccurs="0" maxOccurs="unbound" />
 
 		<xsd:sequence>
@@ -139,12 +150,8 @@
 
 	<xsd:complexType name="PatchType">
 		<xsd:attribute name="name" type="xsd:string" use="optional" />
-		<xsd:attribute name="midi_channel"  type="xsd:nonNegativeInteger" use="required" />
-		<xsd:attribute name="midi_bank_msb" type="xsd:nonNegativeInteger" use="optional" />
-		<xsd:attribute name="midi_bank_lsb" type="xsd:nonNegativeInteger" use="optional" />
-		<xsd:attribute name="midi_program"  type="xsd:nonNegativeInteger" use="optional" />
-		<xsd:attribute name="number_of_counters" type="xsd:nonNegativeInteger" use="optional" default="0" />
 
+		<xsd:element name="midi_configuration" type="midiConfigurationType" minOccurs="0" maxOccurs="unbound" />
 		<xsd:element name="cc" type="ccMessagesType" minOccurs="0" maxOccurs="unbound" />
 
 		<xsd:element name="banks">
@@ -153,5 +160,6 @@
 			</xsd:sequence>
 		</xsd:element>
 	</xsd:complexType>
+	
 	<xsd:element name="patch" type="PatchType" /> 	
 </xsd:schema>

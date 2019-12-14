@@ -67,6 +67,8 @@
 #define MAX_DELAYED_NOTES_COUNT  120
 #define MAX_SUSTAIN_STRINGS_COUNT 12
 #define STRINGS_COUNT 12
+#define MAX_NAME_LENGTH 33
+// 32 letters (+1 for \0 string termination)
 
 // flags for chord selection / drums status
 #define NONE   0x00
@@ -270,11 +272,17 @@ struct cc_message_t {
 	int value;
 };
 
-struct midi_info_t {
+struct midi_program_change_t {
 	int channel;
 	int bank_msb;
 	int bank_lsb;
 	int program;
+};
+
+struct midi_configuration_t {
+	int default_channel;
+	int program_change_count;
+	struct midi_program_change_t *program_change;
 };
 
 struct range_t {
@@ -298,7 +306,8 @@ struct counter_t {
 };
 
 struct patch_t {
-	struct midi_info_t midi;
+	char name[MAX_NAME_LENGTH];
+	struct midi_configuration_t midi;
 	int cc_length;
 	struct cc_message_t *cc;
 	int whammy_length;
@@ -375,8 +384,9 @@ struct state_t {
 
 // a bank is a collection of chords and sequences
 struct bank_t {
+	char name[MAX_NAME_LENGTH];
 	char selectable;
-	struct midi_info_t midi;
+	struct midi_configuration_t midi;
 	struct chord_t *chord;
 	unsigned char chord_count;
 	struct sequence_t *sequence;

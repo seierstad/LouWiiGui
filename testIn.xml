@@ -1,5 +1,9 @@
 ﻿<?xml version="1.0" encoding="UTF-8"?>
-<patch name="test patch" midi_channel="1" midi_program="13">
+<patch name="test patch">
+	<midi_configuration default_channel="1">
+		<program_change program="13" />
+		<program_change program="1" channel="3" />
+	</midi_configuration>
 	<cc>
 		<message parameter="7" value="48" />
 		<message midi_channel="2" parameter="7" value="46" />
@@ -7,13 +11,17 @@
 	</cc>
 	<whammy>
 		<scaled_message type="pitch" min="8192" max="0" />
-		<scaled_message type="pitch" min="8192" max="0" midi_channel="3" />
-		<scaled_message type="cc"    min="127"  max="60" cc="filter_cutoff" in_min="whammy_min" in_max="whammy_mid" />
-		<scaled_message type="cc"    min="60"  max="127" cc="filter_cutoff" in_min="whammy_mid" in_max="whammy_max" />
-		<scaled_message type="cc"    min="0"  max="16000" cc="1" cc_lsb="modulation" />
+		<scaled_message type="pitch" min="8192" max="0"  midi_channel="3" />
+		<scaled_message type="cc"    min="127"  max="60"    cc="filter_cutoff" in_min="whammy_min" in_max="whammy_mid" />
+		<scaled_message type="cc"    min="60"   max="127"   cc="filter_cutoff" in_min="whammy_mid" in_max="whammy_max" />
+		<scaled_message type="cc"    min="0"    max="16000" cc="1" cc_lsb="modulation" />
 	</whammy>
 	<banks>
 		<bank name="intro" midi_channel="1" midi_program="13">
+			<midi_configuration default_channel="1">
+				<program_change program="14" />
+				<program_change program="33" channel="3" />
+			</midi_configuration>
 			<whammy>
 				<scaled_message type="pitch" min="8192" max="0" />
 				<scaled_message type="cc"    min="127"  max="60" cc="filter_cutoff" in_min="whammy_min" in_max="whammy_mid" />
@@ -212,6 +220,10 @@
 			</chords>
 		</bank>
 		<bank name="Thunderstruck">
+			<midi_configuration>
+				<program_change channel="1" program="21" />
+				<program_change channel="3" program="38" />
+			</midi_configuration>
 			<sequence_counters>
 				<counter length="5" />
 				<counter length="3" />

@@ -39,7 +39,7 @@
 
 #define LOUWIIGUI_CWIID_RPT_MODE (CWIID_RPT_EXT | CWIID_RPT_BTN) // | CWIID_RPT_ACC)
 
-#define USE_MIDI_CHANNEL bank[state.selected_bank].midi.channel ? bank[state.selected_bank].midi.channel : patch.midi.channel
+#define USE_MIDI_CHANNEL bank[state.selected_bank].midi.default_channel ? bank[state.selected_bank].midi.default_channel : patch.midi.default_channel
 
 void neio(int sig, siginfo_t *si, void *uc) {
     struct delayed_note_t * dn;
@@ -72,25 +72,25 @@ void usage() {
   (byte & 0x01 ? 1 : 0)
 */
 
-void sendBankProgramChange(int bank_msb, int bank_lsb, int program, void *port_buf, jack_nframes_t time) {
-    unsigned char* buffer;
-    int use_midi_channel = USE_MIDI_CHANNEL;
+void sendProgramChange(struct midi_program_change_t pc, void *port_buf, jack_nframes_t time) {
 
-    if (bank_msb != MIDI_DATA_NULL) {
+    unsigned char* buffer;
+    int use_midi_channel = pc.channel ? pc.channel : USE_MIDI_CHANNEL;
+    if (pc.bank_msb != MIDI_DATA_NULL) {
         buffer = jack_midi_event_reserve(port_buf, time, 3);
-        buffer[2] = bank_msb;
+        buffer[2] = pc.bank_msb;
         buffer[1] = MIDI_CC_BANK_SELECT_MSB;
         buffer[0] = MIDI_CONTROL_CHANGE + use_midi_channel - 1;
     }
-    if (bank_lsb != MIDI_DATA_NULL) {
+    if (pc.bank_lsb != MIDI_DATA_NULL) {
         buffer = jack_midi_event_reserve(port_buf, time, 3);
-        buffer[2] = bank_lsb;
+        buffer[2] = pc.bank_lsb;
         buffer[1] = MIDI_CC_BANK_SELECT_LSB;
         buffer[0] = MIDI_CONTROL_CHANGE + use_midi_channel - 1;
     }
-    if (program != MIDI_DATA_NULL) {
+    if (pc.program != MIDI_DATA_NULL) {
         buffer = jack_midi_event_reserve(port_buf, time, 2);
-        buffer[1] = program;
+        buffer[1] = pc.program;
         buffer[0] = MIDI_PROGRAM_CHANGE + use_midi_channel - 1;
     }
 
@@ -106,17 +106,22 @@ void sendCCMessage(struct cc_message_t cc, void *port_buf, jack_nframes_t time) 
 	buffer[0] = MIDI_CONTROL_CHANGE + use_midi_channel - 1;
 }
 
+void sendMidiConfiguration (struct midi_configuration_t config, void* port_buf, jack_nframes_t time) {
+    if (config.program_change_count > 0) {
+        for (int i = 0; i < config.program_change_count; i++) {
+            sendProgramChange(config.program_change[i], port_buf, time);
+        }
+    }
+}
+
 void selectBank (unsigned char bank_number, void *port_buf, jack_nframes_t time) {
     if (bank[bank_number].selectable && state.selected_bank != bank_number) {
         state.selected_bank = bank_number;
 
-        if (
-            bank[state.selected_bank].midi.program != MIDI_DATA_NULL || 
-            bank[state.selected_bank].midi.bank_msb != MIDI_DATA_NULL || 
-            bank[state.selected_bank].midi.bank_lsb != MIDI_DATA_NULL) {
-            sendBankProgramChange(bank[state.selected_bank].midi.bank_msb, bank[state.selected_bank].midi.bank_lsb, bank[state.selected_bank].midi.program, port_buf, time); 
+        if (bank[state.selected_bank].midi.program_change_count > 0) {
+            sendMidiConfiguration(bank[state.selected_bank].midi, port_buf, time);
         } else {
-            sendBankProgramChange(patch.midi.bank_msb, patch.midi.bank_lsb, patch.midi.program, port_buf, time); 
+            sendMidiConfiguration(patch.midi, port_buf, time);
         }
 
         if (bank[state.selected_bank].cc_length > 0) {
@@ -125,7 +130,7 @@ void selectBank (unsigned char bank_number, void *port_buf, jack_nframes_t time)
         	}
         }
 
-        printf("selected bank: %d\n", state.selected_bank);
+        printf("selected bank %d: %s\n", state.selected_bank, bank[state.selected_bank].name);
     }
 }
 
@@ -688,9 +693,12 @@ int process(jack_nframes_t nframes, void *arg) {
 
             switch (state.action.system) {
                 case SYSTEM_ACTION_PATCH_INIT:
-                    sendBankProgramChange(patch.midi.bank_msb, patch.midi.bank_lsb, patch.midi.program, port_buf, i);
+                    printf("patch midi init\n");
+                    sendMidiConfiguration(patch.midi, port_buf, i);
+
                     if (bank[state.selected_bank].selectable) {
-                        sendBankProgramChange(bank[state.selected_bank].midi.bank_msb, bank[state.selected_bank].midi.bank_lsb, bank[state.selected_bank].midi.program, port_buf, i);
+                        printf("bank midi init\n");
+                        sendMidiConfiguration(bank[state.selected_bank].midi, port_buf, i);
                     }
                     if (patch.cc_length > 0) {
                     	for (j = 0; j < patch.cc_length; j++) {
@@ -1007,7 +1015,7 @@ void writeCurrentPatchToFile(const char *file) {
     }
 
     /* Add an attribute with name "velocity" and value chord[i].note.velocity to note. */
-    rc = xmlTextWriterWriteFormatAttribute(writer, BAD_CAST "midi_channel", "%d", patch.midi.channel);
+    rc = xmlTextWriterWriteFormatAttribute(writer, BAD_CAST "midi_channel", "%d", patch.midi.default_channel);
     if (rc < 0) {
         printf("writeCurrentPatchToFile: Error at xmlTextWriterWriteAttribute\n");
         return;
@@ -1238,21 +1246,6 @@ void readNote (xmlNode *note_element, struct note_t *noteData) {
     printf("\n");
 }
 
-void readMidiInfo (xmlNode *node, struct midi_info_t *midiData) {
-    if (xmlGetProp(node, "midi_channel")) {
-        sscanf(xmlGetProp(node, "midi_channel"), "%d", &(*midiData).channel);
-    }
-    if (xmlGetProp(node, "midi_bank_msb")) {
-        sscanf(xmlGetProp(node, "midi_bank_msb"), "%d", &(*midiData).bank_msb);
-    }
-    if (xmlGetProp(node, "midi_bank_lsb")) {
-        sscanf(xmlGetProp(node, "midi_bank_lsb"), "%d", &(*midiData).bank_lsb);
-    }
-    if (xmlGetProp(node, "midi_program")) {
-        sscanf(xmlGetProp(node, "midi_program"), "%d", &(*midiData).program);
-    }
-}
-
 int parseAsMidiValue (xmlNode * node, char * prop) {
     int numberValue;
     char stringValue[20];
@@ -1462,59 +1455,6 @@ int getFretStatus (xmlNode* node) {
     printf("\n");
     return status;
 }
-
-
-void readVariations(xmlNode* node, struct chord_t** variations);
-
-
-/*
-
-void readVariation(xmlNode* chordNode, struct chord_t chord) {
-    xmlNode *chord_content;
-    int note_index = 0;
-
-    if (xmlGetProp(chordNode, "number_of_notes")) {
-        sscanf(xmlGetProp(chordNode, "number_of_notes"), "%d", &(chord.size));
-    }
-    chord.note = malloc(chord.size * sizeof(struct note_t));
-
-    chord_content = chordNode->children;
-    while (chord_content != NULL) {
-        if (chord_content->type == XML_ELEMENT_NODE) {
-            if (!strcmp(chord_content->name, "note") && note_index < chord.size) {
-                readNote(chord_content, &(chord.note[note_index]));
-                note_index++;
-            }
-        }
-        chord_content = chord_content->next;
-    }
-}
-
-void readVariations(xmlNode* node, struct chord_t** variations) {
-    int variation_index;
-    struct chord_t *chord;
-    xmlNode *variation_element = node->children;
-    printf("variations: ------------------------\n\n");
-
-    for (int variation_index = 0; variation_index < ALL_COLOR_COMBINATIONS; variation_index++) {
-        variations[variation_index] = NULL;
-    }
-
-    variations = malloc(ALL_COLOR_COMBINATIONS * sizeof(struct chord_t*));
-    while (variation_element != NULL) {
-        if (variation_element->type == XML_ELEMENT_NODE && !strcmp(variation_element->name, "chord")) {
-            variation_index = getFretStatus(variation_element);
-            chord = malloc(sizeof(struct chord_t));
-            *chord = readChord(variation_element);
-            variations[variation_index] = chord;
-        }
-        variation_element = variation_element->next;
-    }
-    printf("variations end ------------------------\n\n");
-}
-*/
-
-
 
 
 void readCounter(xmlNode *node, struct counter_t* counter) {
@@ -1744,17 +1684,68 @@ void readSequences(xmlNode *node, unsigned char *count, struct sequence_t** sequ
     }
 }
 
+void readProgramChange (xmlNode *node, struct midi_program_change_t *pc) {
+    if (xmlGetProp(node, "channel")) {
+        sscanf(xmlGetProp(node, "channel"), "%d", &(*pc).channel);
+    } else {
+        (*pc).channel = 0;
+    }
+    if (xmlGetProp(node, "bank_msb")) {
+        sscanf(xmlGetProp(node, "bank_msb"), "%d", &(*pc).bank_msb);
+    } else {
+        (*pc).bank_msb = MIDI_DATA_NULL;
+    }
+    if (xmlGetProp(node, "bank_lsb")) {
+        sscanf(xmlGetProp(node, "bank_lsb"), "%d", &(*pc).bank_lsb);
+    } else {
+        (*pc).bank_lsb = MIDI_DATA_NULL;
+    }
+    if (xmlGetProp(node, "program")) {
+        sscanf(xmlGetProp(node, "program"), "%d", &(*pc).program);
+    }
+}
+
+void readMidiConfiguration (xmlNode *node, struct midi_configuration_t *midiConfiguration) {
+    int pc_index = 0;
+    xmlNode *pcNode = node->children;
+
+    if (xmlGetProp(node, "default_channel")) {
+        sscanf(xmlGetProp(node, "default_channel"), "%d", &(*midiConfiguration).default_channel);
+    } else {
+        (*midiConfiguration).default_channel = 0;
+    }
+    (*midiConfiguration).program_change_count = (int)xmlChildElementCount(node);
+    (*midiConfiguration).program_change = malloc((*midiConfiguration).program_change_count * sizeof(struct midi_program_change_t));
+
+    printf("reading midi config\n");
+    while (pcNode != NULL) {
+        if (pcNode->type == XML_ELEMENT_NODE) {
+            printf("reading program change %d\n", pc_index);
+            readProgramChange(pcNode, &((*midiConfiguration).program_change[pc_index]));
+            pc_index++;
+        }
+        pcNode = pcNode->next;
+    }
+}
+
+void readName (xmlNode* node, char name[MAX_NAME_LENGTH]) {
+    if (xmlGetProp(node, "name")) {
+        sscanf(xmlGetProp(node, "name"), "%[^\t\n]", &(*name));
+    }
+}
+
 void readBank(xmlNode* node, struct bank_t* bank) {
     xmlNode* bank_content;
-    //readMidiInfo(node, &(bank->midi));
-    int length = 2;
-    int* lengthPtr;
 
     bank_content = node->children;
+    readName(node, &(*bank->name));
+    printf("%s:\n", bank->name);
 
     while (bank_content != NULL) {
         if (bank_content->type == XML_ELEMENT_NODE) {
-
+            if (!strcmp(bank_content->name, "midi_configuration")) {
+                readMidiConfiguration(bank_content, &bank->midi);
+            }
             if (!strcmp(bank_content->name, "cc")) {
                 readCC(bank_content, &bank->cc_length, &bank->cc);
             }
@@ -1809,13 +1800,15 @@ void readPatchFromFile (const char *file) {
     cur = root_element;
 
     if (!strcmp(cur->name, "patch")) {
-        printf ("patch name: %s\n", xmlGetProp(cur, "name"));
-        readMidiInfo(cur, &patch.midi);
-        printf("midi channel: %d\n", patch.midi.channel);
+        readName(cur, patch.name);
+        printf ("patch name: %s\n", patch.name);
         cur = cur->children;
 
         while (cur != NULL) {
-        	if (cur->type == XML_ELEMENT_NODE) { 
+        	if (cur->type == XML_ELEMENT_NODE) {
+                if (!strcmp(cur->name, "midi_configuration")) {
+                    readMidiConfiguration(cur, &patch.midi);
+                }
                 if (!strcmp(cur->name, "cc")) {
                 	readCC(cur, &patch.cc_length, &patch.cc);
                 }
@@ -1829,19 +1822,18 @@ void readPatchFromFile (const char *file) {
                 }
 
 		        if (!strcmp(cur->name, "banks")) {
-		            printf("%s\n", cur->name);
+		            printf("%s:\n", cur->name);
 		            bank_element = cur->children;
 		            bank_index = 0;
 
 		            while (bank_element != NULL) {
 		                if (bank_element->type == XML_ELEMENT_NODE) {
-		                    printf("bank %d %s\n", bank_index, xmlGetProp(bank_element, "name"));
+		                    printf("bank %d ", bank_index);
                             readBank(bank_element, &(bank[bank_index]));
 		                    bank_index += 1;
 		                }
 		                bank_element = bank_element->next;
 		            }
-		            printf("\n");
 		        }
 		    }
 		    cur = cur->next;
@@ -1923,10 +1915,8 @@ void init() {
     touchbar_range.min = CWIID_GUITAR_TOUCHBAR_VALUE_1ST;
     touchbar_range.max = CWIID_GUITAR_TOUCHBAR_VALUE_5TH;
 
-    patch.midi.channel = 0;
-    patch.midi.bank_msb = MIDI_DATA_NULL;
-    patch.midi.bank_lsb = MIDI_DATA_NULL;
-    patch.midi.program = MIDI_DATA_NULL;
+    patch.midi.default_channel = 0;
+    patch.midi.program_change_count = 0;
 
     margin.it_value.tv_sec = 0;
     margin.it_value.tv_nsec = 50000000;
@@ -1940,10 +1930,8 @@ void init() {
 
     bank = malloc(MAX_BANKS_COUNT * sizeof(struct bank_t));
     for(i = 0; i < MAX_BANKS_COUNT; i++) {
-        bank[i].midi.channel = 0;
-        bank[i].midi.bank_msb = MIDI_DATA_NULL;
-        bank[i].midi.bank_lsb = MIDI_DATA_NULL;
-        bank[i].midi.program = MIDI_DATA_NULL;
+        bank[i].midi.default_channel = 0;
+        bank[i].midi.program_change_count = 0;
         bank[i].whammy_length = 0;
         bank[i].touchbar_length = 0;
         bank[i].cc_length = 0;
