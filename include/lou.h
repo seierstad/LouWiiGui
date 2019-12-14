@@ -380,6 +380,7 @@ struct state_t {
 	struct note_t *string;
 	struct chord_t active_notes;
 	struct chord_t queued_notes;
+	unsigned char quit;
 };
 
 // a bank is a collection of chords and sequences

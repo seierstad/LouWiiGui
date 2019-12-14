@@ -682,6 +682,11 @@ int process(jack_nframes_t nframes, void *arg) {
     struct sequence_t *sequence;
     char sequence_found = 0;
 
+    if (state.quit != 0) {
+        printf("About to quit\n");
+        return 1;
+    }
+
     for (i = 0; i < nframes; i++) {
         while(state.queued_notes.size > 0) {
             note_on(state.queued_notes.note[state.queued_notes.size - 1], port_buf, i);
@@ -1154,30 +1159,14 @@ void writeCurrentPatchToFile(const char *file) {
     xmlFreeDoc(doc);
 }
 
-void freePatchMemory () {
-    int bank_index, chord_index, sequence_index;
-/*
-    for (bank_index = 0; bank_index < MAX_BANKS_COUNT; bank_index++) {
-        for (chord_index = 0; chord_index < ALL_COLOR_COMBINATIONS; chord_index++) {
-            free(bank[bank_index].chord[chord_index].note);
-        }
-        for (sequence_index = 0; sequence_index < ALL_COLOR_COMBINATIONS; sequence_index++) {
-        	for (int step_index = 0; step_index < bank[bank_index].sequence[sequence_index].length; step_index++) {
-        		free(bank[bank_index].sequence[sequence_index].step[step_index].note);
-        	}
-        }
-    }
-*/
-    free(bank);
-}
-
 void freeStateMemory () {
-    int delayed_notes_index;
-    int active_notes_index;
-
+/*
     free(state.delayed_notes);
+    free(state.string);
+    free(state.sustain_string);
     free(state.queued_notes.note);
     free(state.active_notes.note);
+*/
 }
 
 void readNote (xmlNode *note_element, struct note_t *noteData) {
@@ -1464,6 +1453,8 @@ void readCounter(xmlNode *node, struct counter_t* counter) {
     (*counter).position = 0;
 }
 
+void freeCounterMemory (struct counter_t* counter) {}
+
 void readCounters (xmlNode *countersNode, int *number_of_counters, struct counter_t** counters) {
     int counter_index;
     xmlNode *counterNode;
@@ -1484,6 +1475,14 @@ void readCounters (xmlNode *countersNode, int *number_of_counters, struct counte
     }
 }
 
+void freeCountersMemory (int *number_of_counters, struct counter_t** counters) {
+    if (*number_of_counters > 0) {
+        for (int i = *number_of_counters; i >= 0; i--) {
+            freeCounterMemory(&(*counters)[i]);
+        }
+    }
+    free(*counters);
+}
 
 void readCCMessage (xmlNode *node, struct cc_message_t *cc) {
 
@@ -1499,6 +1498,8 @@ void readCCMessage (xmlNode *node, struct cc_message_t *cc) {
     }
     printf("cc (read):\tv: %d\tp: %d\t c: %d\n", (*cc).parameter, (*cc).value, (*cc).channel);
 }
+
+void freeCCMessageMemory(struct cc_message_t *cc) {}
 
 void readCC (xmlNode* node, int *number_of_messages, struct cc_message_t **cc) {
     xmlNode* message_element;
@@ -1516,6 +1517,15 @@ void readCC (xmlNode* node, int *number_of_messages, struct cc_message_t **cc) {
        }
        message_element = message_element->next;
     }
+}
+
+void freeCCMemory (int *number_of_messages, struct cc_message_t **cc) {
+    if (number_of_messages > 0) {
+        for (int i = *number_of_messages - 1; i <= 0; i--) {
+            freeCCMessageMemory(&(*cc)[i]);
+        }
+    }
+    free(*cc);
 }
 
 
@@ -1559,6 +1569,7 @@ void readScaledMessage (xmlNode *node, struct scaled_message_t *sm) {
     }
 }
 
+void freeScaledMessage (struct scaled_message_t *sm) {}
 
 void readScaledMessages (xmlNode *messagesNode, unsigned int *number_of_messages, struct scaled_message_t** messages) {
     xmlNode *message_element;
@@ -1578,6 +1589,22 @@ void readScaledMessages (xmlNode *messagesNode, unsigned int *number_of_messages
     }
 }
 
+void freeScaledMessages (unsigned int *number_of_messages, struct scaled_message_t** messages) {
+    if (*number_of_messages > 0) {
+        for (int i = *number_of_messages - 1; i >= 0; i--) {
+            freeScaledMessage(&(*messages)[i]);
+        }
+    }
+    free(*messages);
+}
+
+void freeTouchbarMemory (unsigned int *number_of_messages, struct scaled_message_t** messages) {
+    freeScaledMessages(number_of_messages, messages);
+}
+
+void freeWhammyMemory (unsigned int *number_of_messages, struct scaled_message_t** messages) {
+    freeScaledMessages(number_of_messages, messages);
+}
 
 void printScaledMessageList (struct scaled_message_t *message) {
     printf("type: %d,\tmin: %d,\tmax: %d,\tcc: %d,\tcc_lsb: %d,\tin_min: %d,\tin_max: %d\n",
@@ -1585,6 +1612,7 @@ void printScaledMessageList (struct scaled_message_t *message) {
 }
 
 void readChords (xmlNode *chordsNode, unsigned char *count, struct chord_t **chords);
+void freeChordsMemory (unsigned char *count, struct chord_t **chords);
 
 void readChord(xmlNode* chordNode, struct chord_t *chord) {
     xmlNode *chord_content;
@@ -1612,6 +1640,13 @@ void readChord(xmlNode* chordNode, struct chord_t *chord) {
     }
 }
 
+void freeChordMemory (struct chord_t *chord) {
+    if ((*chord).variation_count > 0) {
+        freeChordsMemory(&(*chord).variation_count, &(*chord).variation);
+    }
+    free((*chord).note);
+}
+
 void readChords (xmlNode *chordsNode, unsigned char *count, struct chord_t **chords) {
     xmlNode *chord_element;
     int chord_index = 0;
@@ -1628,6 +1663,15 @@ void readChords (xmlNode *chordsNode, unsigned char *count, struct chord_t **cho
         }
         chord_element = chord_element->next;
     }
+}
+
+void freeChordsMemory (unsigned char *count, struct chord_t **chords) {
+    if (*count > 0) {
+        for (int i = *count - 1; i >= 0; i--) {
+            freeChordMemory(&(*chords)[i]);
+        }
+    }
+    free(*chords);
 }
 
 struct sequence_t readSequence (xmlNode *sequenceNode, struct sequence_t *sequence) {
@@ -1667,7 +1711,14 @@ struct sequence_t readSequence (xmlNode *sequenceNode, struct sequence_t *sequen
     }
 }
 
-void readSequences(xmlNode *node, unsigned char *count, struct sequence_t** sequences) {
+void freeSequenceMemory (struct sequence_t *sequence) {
+    for (int i = (*sequence).length - 1; i >= 0; i--) {
+        freeChordMemory(&(*sequence).step[i]);
+    }
+    free((*sequence).step);
+}
+
+void readSequences (xmlNode *node, unsigned char *count, struct sequence_t** sequences) {
     xmlNode *sequence_element = node->children;
     int sequence_index = 0;
 
@@ -1682,6 +1733,13 @@ void readSequences(xmlNode *node, unsigned char *count, struct sequence_t** sequ
         }
         sequence_element = sequence_element->next;
     }
+}
+
+void freeSequencesMemory (int count, struct sequence_t **sequences) {
+    for (int i = count - 1; i >= 0; i--) {
+        freeSequenceMemory(&(*sequences)[i]);
+    }
+    free(*sequences);
 }
 
 void readProgramChange (xmlNode *node, struct midi_program_change_t *pc) {
@@ -1704,6 +1762,8 @@ void readProgramChange (xmlNode *node, struct midi_program_change_t *pc) {
         sscanf(xmlGetProp(node, "program"), "%d", &(*pc).program);
     }
 }
+
+void freeProgramChangeMemory (struct midi_program_change_t *pc) {}
 
 void readMidiConfiguration (xmlNode *node, struct midi_configuration_t *midiConfiguration) {
     int pc_index = 0;
@@ -1728,13 +1788,22 @@ void readMidiConfiguration (xmlNode *node, struct midi_configuration_t *midiConf
     }
 }
 
+void freeMidiMemory (struct midi_configuration_t *midiConfiguration) {
+    if ((*midiConfiguration).program_change_count > 0) {
+        for (int i = (*midiConfiguration).program_change_count - 1; i >= 0; i--) {
+            freeProgramChangeMemory(&((*midiConfiguration).program_change[i]));
+        }
+    }
+    free((*midiConfiguration).program_change);
+}
+
 void readName (xmlNode* node, char name[MAX_NAME_LENGTH]) {
     if (xmlGetProp(node, "name")) {
         sscanf(xmlGetProp(node, "name"), "%[^\t\n]", &(*name));
     }
 }
 
-void readBank(xmlNode* node, struct bank_t* bank) {
+void readBank (xmlNode* node, struct bank_t* bank) {
     xmlNode* bank_content;
 
     bank_content = node->children;
@@ -1746,11 +1815,11 @@ void readBank(xmlNode* node, struct bank_t* bank) {
             if (!strcmp(bank_content->name, "midi_configuration")) {
                 readMidiConfiguration(bank_content, &bank->midi);
             }
-            if (!strcmp(bank_content->name, "cc")) {
-                readCC(bank_content, &bank->cc_length, &bank->cc);
-            }
             if (!strcmp(bank_content->name, "sequence_counters")) {
                 readCounters(bank_content, &bank->number_of_counters, &bank->counter);
+            }
+            if (!strcmp(bank_content->name, "cc")) {
+                readCC(bank_content, &bank->cc_length, &bank->cc);
             }
             if (!strcmp(bank_content->name, "whammy")) {
                 readScaledMessages(bank_content, &bank->whammy_length, &bank->whammy);
@@ -1771,8 +1840,30 @@ void readBank(xmlNode* node, struct bank_t* bank) {
         bank_content = bank_content->next;
     }
     bank->selectable = 1;
+}
 
-
+void freeBankMemory (struct bank_t *bank) {
+    if ((*bank).selectable) {
+        if ((*bank).sequence_count > 0) {
+            freeSequencesMemory(bank->sequence_count, &(bank->sequence));
+        }
+        if ((*bank).chord_count > 0) {
+            freeChordsMemory(&(*bank).chord_count, &(*bank).chord);
+        }
+        if ((*bank).touchbar_length > 0) {
+            freeTouchbarMemory(&(*bank).touchbar_length, &(*bank).touchbar);
+        }
+        if ((*bank).whammy_length > 0) {
+            freeWhammyMemory(&(*bank).whammy_length, &(*bank).whammy);
+        }
+        if ((*bank).cc_length > 0) {
+            freeCCMemory(&(*bank).cc_length, &(*bank).cc);
+        }
+        if ((*bank).number_of_counters > 0) {
+            freeCountersMemory(&(*bank).number_of_counters, &(*bank).counter);
+        }
+        freeMidiMemory(&(*bank).midi);
+    }
 }
 
 void readPatchFromFile (const char *file) {
@@ -1851,7 +1942,23 @@ void readPatchFromFile (const char *file) {
     state.action.system = SYSTEM_ACTION_PATCH_INIT;
 }
 
+void freePatchMemory () {
+    for (int bank_index = MAX_BANKS_COUNT - 1; bank_index >= 0; bank_index--) {
+        freeBankMemory(&bank[bank_index]);
+    }
+    if (patch.touchbar_length > 0) {
+        freeTouchbarMemory(&patch.touchbar_length, &patch.touchbar);
+    }
+    if (patch.whammy_length > 0) {
+        freeWhammyMemory(&patch.whammy_length, &patch.whammy);
+    }
+    if (patch.cc_length > 0) {
+        freeCCMemory(&patch.cc_length, &patch.cc);
+    }
+    freeMidiMemory(&patch.midi);
 
+    free(bank);
+}
 
 
 /* END XML FUNCTIONS */
@@ -1861,12 +1968,13 @@ void readPatchFromFile (const char *file) {
 struct sigevent sigev;
 
 
-void init() {
+void init () {
     int i;
     empty_chord.size = 0;
     empty_chord.touchbar_length = 0;
     empty_chord.variation_count = 0;
 
+    state.quit = 0;
     state.active_chord = &empty_chord;
     state.action.buttons = BUTTONS_ACTION_NONE;
     state.action.buttons_data = 0;
@@ -1939,8 +2047,9 @@ void init() {
     }    
 }
 
-void siginthandler(int param) {
+void siginthandler (int param) {
     printf("User pressed Ctrl+C\n");
+    state.quit = 1;
     mute(output_port, 0);
 
     if (client) {
@@ -1961,7 +2070,7 @@ void siginthandler(int param) {
     exit(1);
 }
 
-int main(int argc, char *argv[]) {
+int main (int argc, char *argv[]) {
     init();
     
     struct cwiid_state state;    /* wiimote state */
