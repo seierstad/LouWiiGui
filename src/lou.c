@@ -125,6 +125,7 @@ void selectBank (unsigned char bank_number, void *port_buf, jack_nframes_t time)
         }
 
         if (bank[state.selected_bank].cc_length > 0) {
+            printf("cc %d i bank %d\n", bank[state.selected_bank].cc_length, state.selected_bank);
         	for (int j = 0; j < bank[state.selected_bank].cc_length; j++) {
         		sendCCMessage(bank[state.selected_bank].cc[j], port_buf, time);
         	}
@@ -170,6 +171,12 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
                     state.action.buttons = BUTTONS_ACTION_BANK_CHANGE;
                     state.action.buttons_data = 1;
                 }
+                if (buttons == CWIID_BTN_A + CWIID_BTN_RIGHT) {
+                    state.action.buttons = BUTTONS_ACTION_NEXT_PATCH;
+                } else if (buttons == CWIID_BTN_A + CWIID_BTN_LEFT) {
+                    state.action.buttons = BUTTONS_ACTION_PREVIOUS_PATCH;
+                }
+
 
 
                 printf("buttons: %d\ttranspose: %d\n", buttons, state.transpose);
@@ -670,6 +677,68 @@ void mute_string_notes (void *port_buf, int i) {
 	}
 }
 
+void initPatch (void *port_buf, jack_nframes_t i) {
+    int j;
+    printf("patch midi init\n");
+    sendMidiConfiguration(patch.midi, port_buf, i);
+    state.selected_bank = 0;
+
+    if (patch.cc_length > 0) {
+        for (j = 0; j < patch.cc_length; j++) {
+            sendCCMessage(patch.cc[j], port_buf, i);
+        }
+    }
+
+    if (bank[state.selected_bank].selectable) {
+        printf("bank midi init\n");
+        sendMidiConfiguration(bank[state.selected_bank].midi, port_buf, i);
+        printf("bank-midiconfig ferdig\n");
+        if (bank[state.selected_bank].cc_length > 0) {
+            for (j = 0; j < bank[state.selected_bank].cc_length; j++) {
+                sendCCMessage(bank[state.selected_bank].cc[j], port_buf, i);
+            }
+        }
+    }
+}
+
+void freePatchMemory ();
+int readPatchFromFile (const char* file);
+
+void nextPatch (void *port_buf, jack_nframes_t i) {
+    state.system_pause = 1;
+    if (state.current_patch < *state.argc - 1) {
+        freePatchMemory();
+        state.current_patch++;
+        if (!readPatchFromFile(state.argv[state.current_patch])) {
+            initPatch(port_buf, i);
+        } else {
+            freePatchMemory();
+            state.current_patch--;
+            readPatchFromFile(state.argv[state.current_patch]);
+            initPatch(port_buf, i);
+        }
+    }
+    state.system_pause = 0;
+}
+
+void previousPatch (void *port_buf, jack_nframes_t i) {
+    state.system_pause = 1;
+    if (state.current_patch > 1) {
+        freePatchMemory();
+        state.current_patch--;
+        if (!readPatchFromFile(state.argv[state.current_patch])) {
+            initPatch(port_buf, i);
+        } else {
+            freePatchMemory();
+            state.current_patch++;
+            readPatchFromFile(state.argv[state.current_patch]);
+            initPatch(port_buf, i);
+        }
+    }
+    state.system_pause = 0;
+}
+
+
 int process(jack_nframes_t nframes, void *arg) {
     int i,j;
     void* port_buf = jack_port_get_buffer(output_port, nframes);
@@ -682,8 +751,8 @@ int process(jack_nframes_t nframes, void *arg) {
     struct sequence_t *sequence;
     char sequence_found = 0;
 
-    if (state.quit != 0) {
-        printf("About to quit\n");
+    if (state.system_pause != 0) {
+        printf("System paused\n");
         return 1;
     }
 
@@ -698,25 +767,10 @@ int process(jack_nframes_t nframes, void *arg) {
 
             switch (state.action.system) {
                 case SYSTEM_ACTION_PATCH_INIT:
-                    printf("patch midi init\n");
-                    sendMidiConfiguration(patch.midi, port_buf, i);
-
-                    if (bank[state.selected_bank].selectable) {
-                        printf("bank midi init\n");
-                        sendMidiConfiguration(bank[state.selected_bank].midi, port_buf, i);
-                    }
-                    if (patch.cc_length > 0) {
-                    	for (j = 0; j < patch.cc_length; j++) {
-	                    	sendCCMessage(patch.cc[j], port_buf, i);
-	                    }
-                    }
-                    if (bank[state.selected_bank].cc_length > 0) {
-                    	for (j = 0; j < bank[state.selected_bank].cc_length; j++) {
-                    		sendCCMessage(bank[state.selected_bank].cc[j], port_buf, i);
-                    	}
-                    }
+                    initPatch(port_buf, i);
                     break;
             }
+
             state.action.system = SYSTEM_ACTION_NONE;
         }
 
@@ -968,6 +1022,12 @@ int process(jack_nframes_t nframes, void *arg) {
             switch (state.action.buttons) {
                 case BUTTONS_ACTION_BANK_CHANGE:
                     selectBank(state.action.buttons_data, port_buf, i);
+                    break;
+                case BUTTONS_ACTION_NEXT_PATCH:
+                    nextPatch(port_buf, i);
+                    break;
+                case BUTTONS_ACTION_PREVIOUS_PATCH:
+                    previousPatch(port_buf, i);
                     break;
             }
             state.action.buttons = BUTTONS_ACTION_NONE;
@@ -1617,6 +1677,7 @@ void freeChordsMemory (unsigned char *count, struct chord_t **chords);
 void readChord(xmlNode* chordNode, struct chord_t *chord) {
     xmlNode *chord_content;
     int note_index = 0;
+    (*chord).size = 0;
 
     (*chord).frets = getFretStatus(chordNode);
     (*chord).size = (unsigned int)xmlChildElementCount(chordNode);
@@ -1677,6 +1738,8 @@ void freeChordsMemory (unsigned char *count, struct chord_t **chords) {
 struct sequence_t readSequence (xmlNode *sequenceNode, struct sequence_t *sequence) {
     xmlNode* step_element;
     int number_of_steps, step_index = 0;
+    (*sequence).length = 0;
+
 
     (*sequence).frets = getFretStatus(sequenceNode);
     (*sequence).length = (int)xmlChildElementCount(sequenceNode);
@@ -1765,6 +1828,11 @@ void readProgramChange (xmlNode *node, struct midi_program_change_t *pc) {
 
 void freeProgramChangeMemory (struct midi_program_change_t *pc) {}
 
+void initializeEmptyMidiConfiguration (struct midi_configuration_t *midiConfiguration) {
+    (*midiConfiguration).default_channel = 0;
+    (*midiConfiguration).program_change_count = 0;
+}
+
 void readMidiConfiguration (xmlNode *node, struct midi_configuration_t *midiConfiguration) {
     int pc_index = 0;
     xmlNode *pcNode = node->children;
@@ -1774,13 +1842,13 @@ void readMidiConfiguration (xmlNode *node, struct midi_configuration_t *midiConf
     } else {
         (*midiConfiguration).default_channel = 0;
     }
+
     (*midiConfiguration).program_change_count = (int)xmlChildElementCount(node);
     (*midiConfiguration).program_change = malloc((*midiConfiguration).program_change_count * sizeof(struct midi_program_change_t));
 
     printf("reading midi config\n");
     while (pcNode != NULL) {
         if (pcNode->type == XML_ELEMENT_NODE) {
-            printf("reading program change %d\n", pc_index);
             readProgramChange(pcNode, &((*midiConfiguration).program_change[pc_index]));
             pc_index++;
         }
@@ -1804,10 +1872,20 @@ void readName (xmlNode* node, char name[MAX_NAME_LENGTH]) {
 }
 
 void readBank (xmlNode* node, struct bank_t* bank) {
-    xmlNode* bank_content;
+    (*bank).whammy_length = 0;
+    (*bank).touchbar_length = 0;
+    (*bank).cc_length = 0;
+    (*bank).selectable = 0;
+    (*bank).chord_count = 0;
+    (*bank).sequence_count = 0;
+    (*bank).number_of_counters = 0;
+    memset((*bank).name, '\0', sizeof((*bank).name));
+    initializeEmptyMidiConfiguration(&(*bank).midi);
 
+
+    xmlNode* bank_content;
     bank_content = node->children;
-    readName(node, &(*bank->name));
+    readName(node, (*bank).name);
     printf("%s:\n", bank->name);
 
     while (bank_content != NULL) {
@@ -1866,10 +1944,46 @@ void freeBankMemory (struct bank_t *bank) {
     }
 }
 
-void readPatchFromFile (const char *file) {
+void readBanks (xmlNode *node, int *count, struct bank_t **bank) {
+    printf("%s:\n", node->name);
+    xmlNode *bank_element = node->children;
+    int bank_index = 0;
+
+    *count = (unsigned int)xmlChildElementCount(node);
+    *bank = malloc(*count * sizeof(struct bank_t));
+
+
+    while (bank_element != NULL) {
+        if (bank_element->type == XML_ELEMENT_NODE) {
+            printf("bank %d ", bank_index);
+            readBank(bank_element, &(*bank)[bank_index]);
+            bank_index += 1;
+        }
+        bank_element = bank_element->next;
+    }
+}
+
+void freeBanksMemory (int *count, struct bank_t **bank) {
+    if (*count > 0) {
+        for (int i = *count; i > 0; i--) {
+            freeBankMemory(&(*bank)[i]);
+        }
+    }
+    free(*bank);
+}
+
+
+int readPatchFromFile (const char *file) {
+
+    initializeEmptyMidiConfiguration(&patch.midi);
+    patch.cc_length = 0;
+    patch.whammy_length = 0;
+    patch.touchbar_length = 0;
+    patch.number_of_banks = 0;
+    memset(patch.name, '\0', sizeof(patch.name));
 
     xmlDoc *doc = NULL;
-    xmlNode *root_element, *bank_element, *bank_content, *cur = NULL;
+    xmlNode *root_element, *cur = NULL;
     int bank_index;
 
     /*
@@ -1883,8 +1997,10 @@ void readPatchFromFile (const char *file) {
     doc = xmlReadFile(file, NULL, 0);
 
     if (doc == NULL) {
-        printf("error: could not parse file %s\n", file);
+        fprintf(stderr, "error: could not parse file %s\n", file);
+        return 1;
     }
+
 
     /*Get the root element node */
     root_element = xmlDocGetRootElement(doc);
@@ -1913,18 +2029,7 @@ void readPatchFromFile (const char *file) {
                 }
 
 		        if (!strcmp(cur->name, "banks")) {
-		            printf("%s:\n", cur->name);
-		            bank_element = cur->children;
-		            bank_index = 0;
-
-		            while (bank_element != NULL) {
-		                if (bank_element->type == XML_ELEMENT_NODE) {
-		                    printf("bank %d ", bank_index);
-                            readBank(bank_element, &(bank[bank_index]));
-		                    bank_index += 1;
-		                }
-		                bank_element = bank_element->next;
-		            }
+                    readBanks(cur, &patch.number_of_banks, &bank);
 		        }
 		    }
 		    cur = cur->next;
@@ -1940,15 +2045,17 @@ void readPatchFromFile (const char *file) {
      */
     xmlCleanupParser();
     state.action.system = SYSTEM_ACTION_PATCH_INIT;
+    return 0;
 }
 
 void freePatchMemory () {
-    for (int bank_index = MAX_BANKS_COUNT - 1; bank_index >= 0; bank_index--) {
-        freeBankMemory(&bank[bank_index]);
+    if (patch.number_of_banks > 0) {
+        freeBanksMemory(&patch.number_of_banks, &bank);
     }
     if (patch.touchbar_length > 0) {
         freeTouchbarMemory(&patch.touchbar_length, &patch.touchbar);
     }
+
     if (patch.whammy_length > 0) {
         freeWhammyMemory(&patch.whammy_length, &patch.whammy);
     }
@@ -1956,8 +2063,6 @@ void freePatchMemory () {
         freeCCMemory(&patch.cc_length, &patch.cc);
     }
     freeMidiMemory(&patch.midi);
-
-    free(bank);
 }
 
 
@@ -1974,7 +2079,7 @@ void init () {
     empty_chord.touchbar_length = 0;
     empty_chord.variation_count = 0;
 
-    state.quit = 0;
+    state.system_pause = 0;
     state.active_chord = &empty_chord;
     state.action.buttons = BUTTONS_ACTION_NONE;
     state.action.buttons_data = 0;
@@ -1987,6 +2092,7 @@ void init () {
     state.active_notes.size = 0;
     state.buttons_previous = 0;
     state.chord = 0;
+    state.current_patch = 1;
     state.drums = 0;
     state.drums_buttons_previous = 0;
     state.effect_dial.max_value = 127;
@@ -2018,13 +2124,13 @@ void init () {
         state.string[i].velocity = 0;
     }
 
+
+    bank = malloc(MAX_BANKS_COUNT * sizeof(struct bank_t));
+
     whammy_range.min = 0;
     whammy_range.max = CWIID_GUITAR_WHAMMY_MAX;
     touchbar_range.min = CWIID_GUITAR_TOUCHBAR_VALUE_1ST;
     touchbar_range.max = CWIID_GUITAR_TOUCHBAR_VALUE_5TH;
-
-    patch.midi.default_channel = 0;
-    patch.midi.program_change_count = 0;
 
     margin.it_value.tv_sec = 0;
     margin.it_value.tv_nsec = 50000000;
@@ -2033,23 +2139,13 @@ void init () {
     sigev.sigev_notify = SIGEV_NONE;
     timer_create(CLOCK_MONOTONIC, &sigev, &countdown_id);
     timer_settime(countdown_id, 0, &margin, NULL);
-    timer_gettime(countdown_id, &time_left);
-
-
-    bank = malloc(MAX_BANKS_COUNT * sizeof(struct bank_t));
-    for(i = 0; i < MAX_BANKS_COUNT; i++) {
-        bank[i].midi.default_channel = 0;
-        bank[i].midi.program_change_count = 0;
-        bank[i].whammy_length = 0;
-        bank[i].touchbar_length = 0;
-        bank[i].cc_length = 0;
-        bank[i].selectable = 0;
-    }    
+    timer_gettime(countdown_id, &time_left);   
 }
+
 
 void siginthandler (int param) {
     printf("User pressed Ctrl+C\n");
-    state.quit = 1;
+    state.system_pause = 1;
     mute(output_port, 0);
 
     if (client) {
@@ -2066,13 +2162,16 @@ void siginthandler (int param) {
     freePatchMemory();
     freeStateMemory();
 
-    system("stty echo");
+    if (system("stty echo")) {
+        fprintf(stderr, "Unable to re-enable local echo\n");
+    }
     exit(1);
 }
 
 int main (int argc, char *argv[]) {
     init();
-    
+    state.argc = &argc;
+    state.argv = argv;
     struct cwiid_state state;    /* wiimote state */
     bdaddr_t bdaddr;    /* bluetooth device address */
     unsigned char mesg = 0;
@@ -2087,9 +2186,14 @@ int main (int argc, char *argv[]) {
 // end experiment
 
 
+    printf("Started with %d arguments:\n", argc - 1);
     if (argc > 1) {
+        for (int i = 1; i < argc; i++) {
+            printf("%d: %s\n", i, argv[i]);
+        }
         readPatchFromFile(argv[1]);
     } else {
+        printf("reading default patch file: testIn.xml\n");
         readPatchFromFile("testIn.xml");
     }
     writeCurrentPatchToFile("testOut.xml");
@@ -2151,7 +2255,9 @@ int main (int argc, char *argv[]) {
     }
     free(ports);
 
-    system("stty -echo");
+    if (system("stty -echo")) {
+        fprintf(stderr, "Unable to disable local echo\n");
+    }
     signal(SIGINT, siginthandler);
 
     while (1) {

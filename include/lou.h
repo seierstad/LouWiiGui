@@ -203,7 +203,9 @@ enum effect_dial_action_t {
 
 enum buttons_action_t {
 	BUTTONS_ACTION_NONE,
-	BUTTONS_ACTION_BANK_CHANGE
+	BUTTONS_ACTION_BANK_CHANGE,
+	BUTTONS_ACTION_NEXT_PATCH,
+	BUTTONS_ACTION_PREVIOUS_PATCH
 };
 
 enum scaled_value_type_t {
@@ -314,6 +316,7 @@ struct patch_t {
 	struct scaled_message_t *whammy;
 	int touchbar_length;
 	struct scaled_message_t *touchbar;
+	int number_of_banks;
 };
 
 
@@ -362,6 +365,7 @@ struct state_t {
 	unsigned char strummer;
 	unsigned char whammy;
 	unsigned int chord;
+	unsigned char current_patch;
 	unsigned int previous_strummed_chord;
 	unsigned int drums;
 	uint8_t drums_buttons_previous;
@@ -380,7 +384,9 @@ struct state_t {
 	struct note_t *string;
 	struct chord_t active_notes;
 	struct chord_t queued_notes;
-	unsigned char quit;
+	unsigned char system_pause;
+	int *argc;
+	char **argv;
 };
 
 // a bank is a collection of chords and sequences
