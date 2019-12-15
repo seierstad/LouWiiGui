@@ -15,9 +15,7 @@
 			<scaled_message type="cc" min="0" max="127" cc="resonance" midi_channel="3" />
 		</target>
 		<target>
-			<scaled_message type="cc" min="0" max="127" cc="resonance" midi_channel="1" />
-			<scaled_message type="cc" min="0" max="127" cc="modulation" />
-			<scaled_message type="pitch" min="0" max="8192" />
+			<scaled_message type="cc" min="0" max="127" cc="resonance" />
 		</target>
 	</stick>
 	<whammy>
@@ -25,7 +23,7 @@
 		<scaled_message type="pitch" min="8192" max="0"  midi_channel="3" />
 		<scaled_message type="cc"    min="127"  max="60"    cc="filter_cutoff" in_min="whammy_min" in_max="whammy_mid" />
 		<scaled_message type="cc"    min="60"   max="127"   cc="filter_cutoff" in_min="whammy_mid" in_max="whammy_max" />
-		<scaled_message type="cc"    min="0"    max="16000" cc="1" cc_lsb="modulation" />
+		<scaled_message type="cc"    min="0"    max="16000" cc="modulation" cc_lsb="modulation_lsb" />
 	</whammy>
 	<banks>
 		<bank name="intro" midi_channel="1" midi_program="13">
