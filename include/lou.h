@@ -1,3 +1,5 @@
+
+
 #define MY_ENCODING "UTF-8"
 
 // amount of whammy movement before sending midi
@@ -86,7 +88,6 @@
 #define TOUCHBAR_SLIDE_MARGIN 2
 
 #define CWIID_GUITAR_STICK_MID ((CWIID_GUITAR_STICK_MAX ) / 2)
-#define MAX(a,b) ((a)<(b)?(b):(a))
 
 #define STICK_QUARTER_1(x, y) (x <  CWIID_GUITAR_STICK_MID && y <=  CWIID_GUITAR_STICK_MID)
 #define STICK_QUARTER_2(x, y) (x >= CWIID_GUITAR_STICK_MID && y <  CWIID_GUITAR_STICK_MID)
@@ -205,7 +206,9 @@ enum buttons_action_t {
 	BUTTONS_ACTION_NONE,
 	BUTTONS_ACTION_BANK_CHANGE,
 	BUTTONS_ACTION_NEXT_PATCH,
-	BUTTONS_ACTION_PREVIOUS_PATCH
+	BUTTONS_ACTION_PREVIOUS_PATCH,
+	BUTTONS_ACTION_NEXT_STICK_TARGET,
+	BUTTONS_ACTION_PREVIOUS_STICK_TARGET
 };
 
 enum scaled_value_type_t {
@@ -307,16 +310,24 @@ struct counter_t {
 	int position;
 };
 
+
+struct stick_target_t {
+	int number_of_messages;
+	struct scaled_message_t *messages;
+};
+
 struct patch_t {
 	char name[MAX_NAME_LENGTH];
 	struct midi_configuration_t midi;
+	int number_of_banks;
 	int cc_length;
 	struct cc_message_t *cc;
 	int whammy_length;
 	struct scaled_message_t *whammy;
 	int touchbar_length;
 	struct scaled_message_t *touchbar;
-	int number_of_banks;
+	int number_of_stick_targets;
+	struct stick_target_t *stick_target;
 };
 
 
@@ -334,14 +345,19 @@ struct value_accumulator {
 	unsigned int value;
 };
 
+struct stick_target_state_t {
+	int last_sent_value;
+};
+
 struct stick_state_t {
 	unsigned char position[2];
 	unsigned char average_value;
 	unsigned char rotation_cw_counter;
 	unsigned char rotation_ccw_counter;
-	unsigned char last_sent_value;
 	struct value_accumulator acc;
 	enum stick_zone_t zone;
+	unsigned char current_target;
+	struct stick_target_state_t* target;
 };
 
 struct action_t {
@@ -357,6 +373,7 @@ struct action_t {
 	enum buttons_action_t buttons;
 	enum effect_dial_action_t effect_dial;
 };
+
 
 struct state_t {
 	struct action_t action;
@@ -385,6 +402,7 @@ struct state_t {
 	struct chord_t active_notes;
 	struct chord_t queued_notes;
 	unsigned char system_pause;
+
 	int *argc;
 	char **argv;
 };
@@ -434,3 +452,4 @@ cwiid_mesg_callback_t cwiid_callback;
 
 struct range_t whammy_range;
 struct range_t touchbar_range;
+struct range_t stick_range;

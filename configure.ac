@@ -26,8 +26,8 @@ AC_CHECK_LIB([cwiid], [cwiid_set_rpt_mode],,
 	AC_MSG_ERROR([cwiid library not found]))
 AC_CHECK_LIB([xml2], [xmlNewTextWriterDoc],, 
 	AC_MSG_ERROR([xml2 library not found]))
-#AC_CHECK_LIB([bluetooth], [],, 
-#	AC_MSG_ERROR([bluetooth library not found]))
+AC_CHECK_LIB([m], [sqrt],, 
+	AC_MSG_ERROR([math library not found]))
 
 XML_CFLAGS="`pkg-config libxml-2.0 --cflags`"
 #XML_LDFLAGS="`pkg-config libxml-2.0 --libs-only-L`"
@@ -53,6 +53,8 @@ AC_CHECK_HEADER([string.h],,
 	AC_MSG_ERROR([string.h not found]))
 AC_CHECK_HEADER([time.h],,
 	AC_MSG_ERROR([time.h not found]))
+AC_CHECK_HEADER([math.h],,
+	AC_MSG_ERROR([math.h not found]))
 AC_CHECK_HEADER([jack/jack.h],,
 	AC_MSG_ERROR([jack/jack.h not found]))
 AC_CHECK_HEADER([jack/midiport.h],,

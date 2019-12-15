@@ -25,6 +25,7 @@
 #include <time.h>
 #include <stddef.h>
 #include <string.h>
+#include <math.h>
 
 #include <jack/jack.h>
 #include <jack/midiport.h>
@@ -39,6 +40,7 @@
 
 #define LOUWIIGUI_CWIID_RPT_MODE (CWIID_RPT_EXT | CWIID_RPT_BTN) // | CWIID_RPT_ACC)
 
+#define DISTANCE(a,b) sqrt(pow(a, 2) + pow(b, 2));
 #define USE_MIDI_CHANNEL bank[state.selected_bank].midi.default_channel ? bank[state.selected_bank].midi.default_channel : patch.midi.default_channel
 
 void neio(int sig, siginfo_t *si, void *uc) {
@@ -176,7 +178,12 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
                 } else if (buttons == CWIID_BTN_A + CWIID_BTN_LEFT) {
                     state.action.buttons = BUTTONS_ACTION_PREVIOUS_PATCH;
                 }
-
+                if (buttons == CWIID_BTN_RIGHT) {
+                    state.action.buttons = BUTTONS_ACTION_NEXT_STICK_TARGET;
+                }
+                if (buttons == CWIID_BTN_LEFT) {
+                    state.action.buttons = BUTTONS_ACTION_PREVIOUS_STICK_TARGET;
+                }
 
 
                 printf("buttons: %d\ttranspose: %d\n", buttons, state.transpose);
@@ -320,7 +327,7 @@ void cwiid_callback(cwiid_wiimote_t *wiimote, int mesg_count,
                 if (new_stick_state[CWIID_X] != state.stick.position[CWIID_X] || new_stick_state[CWIID_X] != state.stick.position[CWIID_X]) {
                     int x_diff = abs(new_stick_state[CWIID_X] - CWIID_GUITAR_STICK_MID);
                     int y_diff = abs(new_stick_state[CWIID_Y] - CWIID_GUITAR_STICK_MID);
-                    int distance_from_center = MAX(x_diff, y_diff);
+                    int distance_from_center = DISTANCE(x_diff, y_diff);
 
                     enum stick_zone_t new_stick_zone;
                     if (distance_from_center < 3) {
@@ -739,6 +746,45 @@ void previousPatch (void *port_buf, jack_nframes_t i) {
 }
 
 
+void processStickAction (enum stick_action_t *action, void *port_buf, jack_nframes_t nframes) {
+    unsigned char *buffer;
+    int use_midi_channel = USE_MIDI_CHANNEL;
+    unsigned int stick_value = state.stick.target[state.stick.current_target].last_sent_value;
+
+    if (*action == STICK_ACTION_ROTATE_COUNTER_CLOCKWISE) {
+        stick_value += state.stick.average_value / 2 ;
+        if (stick_value > stick_range.max) {
+            stick_value = stick_range.max; 
+        }
+    } else if (*action == STICK_ACTION_ROTATE_CLOCKWISE) {
+        if (stick_value >= state.stick.average_value / 2) {
+            stick_value -= state.stick.average_value / 2;
+        } else {
+            stick_value = 0;
+        }
+    }
+
+    if (stick_value != state.stick.target[state.stick.current_target].last_sent_value) {
+        sendScaledMessages(patch.stick_target[state.stick.current_target].number_of_messages, patch.stick_target[state.stick.current_target].messages, stick_range, stick_value, port_buf, nframes);
+        state.stick.target[state.stick.current_target].last_sent_value = stick_value;
+    }
+    *action = STICK_ACTION_NONE;
+    printf("\n");
+
+}
+
+void setPreviousStickTarget () {
+    if (state.stick.current_target > 0) {
+        state.stick.current_target--;
+    }
+}
+
+void setNextStickTarget () {
+    if (state.stick.current_target < patch.number_of_stick_targets - 1) {
+        state.stick.current_target++;
+    }
+}
+
 int process(jack_nframes_t nframes, void *arg) {
     int i,j;
     void* port_buf = jack_port_get_buffer(output_port, nframes);
@@ -893,30 +939,7 @@ int process(jack_nframes_t nframes, void *arg) {
 
 
         if (state.action.stick != STICK_ACTION_NONE) {
-            unsigned int volume = state.stick.last_sent_value;
-            if (state.action.stick == STICK_ACTION_ROTATE_COUNTER_CLOCKWISE) {
-                volume += state.stick.average_value / 2 ;
-                if (volume > 127) {
-                    volume = 127; 
-                }
-            } else if (state.action.stick == STICK_ACTION_ROTATE_CLOCKWISE) {
-                if (volume >= state.stick.average_value / 2) {
-                    volume -= state.stick.average_value / 2;
-                } else {
-                    volume = 0;
-                }
-            }
-
-            if (volume != state.stick.last_sent_value) {
-                printf("volume: %d\t", volume);
-                buffer = jack_midi_event_reserve(port_buf, i, 3);
-                buffer[2] = volume;
-                buffer[1] = MIDI_CC_VOLUME_MSB;        // volume
-                buffer[0] = MIDI_CONTROL_CHANGE + use_midi_channel - 1;    // control change
-                state.stick.last_sent_value = volume;
-            }
-            state.action.stick = STICK_ACTION_NONE;
-            printf("\n");
+            processStickAction(&state.action.stick, port_buf, i);
         }
 
         while (state.action.drums != 0) {
@@ -1028,6 +1051,12 @@ int process(jack_nframes_t nframes, void *arg) {
                     break;
                 case BUTTONS_ACTION_PREVIOUS_PATCH:
                     previousPatch(port_buf, i);
+                    break;
+                case BUTTONS_ACTION_NEXT_STICK_TARGET:
+                    setNextStickTarget();
+                    break;
+                case BUTTONS_ACTION_PREVIOUS_STICK_TARGET:
+                    setPreviousStickTarget();
                     break;
             }
             state.action.buttons = BUTTONS_ACTION_NONE;
@@ -1972,6 +2001,39 @@ void freeBanksMemory (int *count, struct bank_t **bank) {
     free(*bank);
 }
 
+void initializeStickTargetStates (unsigned int count, struct stick_target_state_t **stick_target_states) {
+    if (count > 0) {
+        *stick_target_states = malloc(count * sizeof(struct stick_target_state_t));
+    }
+    for (int i = 0; i < count; i++) {
+        (*stick_target_states)->last_sent_value = 0;
+    }
+}
+
+void readStickTargets (xmlNode *node, int *count, struct stick_target_t **target) {
+    xmlNode *target_element = node->children;
+    int target_index = 0;
+
+    *count = (unsigned int)xmlChildElementCount(node);
+    *target = malloc(*count * sizeof(struct stick_target_t));
+
+
+    while (target_element != NULL) {
+        if (target_element->type == XML_ELEMENT_NODE) {
+            printf("stick target %d ", target_index);
+            readScaledMessages(target_element, &(*target)[target_index].number_of_messages, &(*target)[target_index].messages);
+            target_index += 1;
+        }
+        target_element = target_element->next;
+    }
+}
+
+void freeStickTargetsMemory (int *count, struct stick_target_t **target) {
+    for (int i = *count - 1; i >= 0; i--) {
+        freeScaledMessages(&(*target)[i].number_of_messages, &(*target)[i].messages);
+    }
+    free(*target);    
+}
 
 int readPatchFromFile (const char *file) {
 
@@ -1980,6 +2042,7 @@ int readPatchFromFile (const char *file) {
     patch.whammy_length = 0;
     patch.touchbar_length = 0;
     patch.number_of_banks = 0;
+    patch.number_of_stick_targets = 0;
     memset(patch.name, '\0', sizeof(patch.name));
 
     xmlDoc *doc = NULL;
@@ -2015,6 +2078,10 @@ int readPatchFromFile (const char *file) {
         	if (cur->type == XML_ELEMENT_NODE) {
                 if (!strcmp(cur->name, "midi_configuration")) {
                     readMidiConfiguration(cur, &patch.midi);
+                }
+                if (!strcmp(cur->name, "stick")) {
+                    readStickTargets(cur, &patch.number_of_stick_targets, &patch.stick_target);
+                    initializeStickTargetStates(patch.number_of_stick_targets, &state.stick.target);
                 }
                 if (!strcmp(cur->name, "cc")) {
                 	readCC(cur, &patch.cc_length, &patch.cc);
@@ -2103,7 +2170,7 @@ void init () {
     state.stick.acc.count = 0;
     state.stick.acc.value = 0;
     state.stick.average_value = 0;
-    state.stick.last_sent_value = 127;
+    state.stick.current_target = 0;
     state.stick.position[CWIID_X] = 0;
     state.stick.position[CWIID_Y] = 0;
     state.stick.rotation_ccw_counter = 0;
@@ -2131,6 +2198,8 @@ void init () {
     whammy_range.max = CWIID_GUITAR_WHAMMY_MAX;
     touchbar_range.min = CWIID_GUITAR_TOUCHBAR_VALUE_1ST;
     touchbar_range.max = CWIID_GUITAR_TOUCHBAR_VALUE_5TH;
+    stick_range.min = 0;
+    stick_range.max = 256;
 
     margin.it_value.tv_sec = 0;
     margin.it_value.tv_nsec = 50000000;

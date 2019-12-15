@@ -9,6 +9,17 @@
 		<message midi_channel="2" parameter="7" value="46" />
 		<message midi_channel="3" parameter="7" value="44" />
 	</cc>
+	<stick>
+		<target>
+			<scaled_message type="cc" min="0" max="127" cc="volume" />
+			<scaled_message type="cc" min="0" max="127" cc="resonance" midi_channel="3" />
+		</target>
+		<target>
+			<scaled_message type="cc" min="0" max="127" cc="resonance" midi_channel="1" />
+			<scaled_message type="cc" min="0" max="127" cc="modulation" />
+			<scaled_message type="pitch" min="0" max="8192" />
+		</target>
+	</stick>
 	<whammy>
 		<scaled_message type="pitch" min="8192" max="0" />
 		<scaled_message type="pitch" min="8192" max="0"  midi_channel="3" />
