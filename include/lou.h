@@ -123,15 +123,15 @@ enum strummer_action_t {
 };
 
 enum strummer_direction_t {
-	BOTH,
-	UP,
-	DOWN
+	UP = 1,
+	DOWN = 2,
+	BOTH =3
 };
 
 enum sustain_mode_t {
-	SUSTAIN_OFF,      // the note ends when the strummer returns to mid position
-	SUSTAIN_SEQUENCE, // the note ends when the same note is struck on the same midi channel again, or until a different sequence/chord is strummed
-	SUSTAIN_STRING    // the note ends when a new note is triggered on the same string, or when a chord is strummed
+	SUSTAIN_OFF      = 0, // the note ends when the strummer returns to mid position
+	SUSTAIN_SEQUENCE = 1, // the note ends when the same note is struck on the same midi channel again, or until a different sequence/chord is strummed
+	SUSTAIN_STRING   = 2  // the note ends when a new note is triggered on the same string, or when a chord is strummed
 };
 
 enum whammy_action_t {
@@ -240,13 +240,14 @@ enum neck_action_t {
 };
 
 struct note_t {
-	unsigned char direction;
-	unsigned short int velocity;
-	unsigned short int note_number;
+	unsigned char direction : 2;
+	unsigned char legato : 1;
+	unsigned char sustain_mode : 2;
+	unsigned char velocity;
+	unsigned char note_number;
+	unsigned char midi_channel;
+	unsigned char string;
 	unsigned int delay;  // used for strumming patterns (not implemented yet)
-	unsigned int midi_channel;
-	unsigned char sustain_mode;
-	int string;
 };
 
 

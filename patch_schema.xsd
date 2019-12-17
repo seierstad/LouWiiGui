@@ -5,7 +5,7 @@
 		<xsd:attribute name="velocity"     type="xsd:positiveInteger"    use="required" />
 		<xsd:attribute name="delay"        type="xsd:nonNegativeInteger" use="optional" default="0" />
 		<xsd:attribute name="midi_channel" type="xsd:nonNegativeInteger" use="optional" default="0" />
-		<xsd:attribute name="sustained"    type="xsd:boolean"            use="optional" default="false" />
+		<xsd:attribute name="legato"       type="xsd:boolean"            use="optional" default="false" />
 		<xsd:attribute name="direction" use="optional" default="both">
 			<xsd:simpleType>
 				<xsd:restriction base="xsd:string">
@@ -160,6 +160,6 @@
 			</xsd:sequence>
 		</xsd:element>
 	</xsd:complexType>
-	
+
 	<xsd:element name="patch" type="PatchType" /> 	
 </xsd:schema>

@@ -437,15 +437,47 @@ void err(cwiid_wiimote_t *wiimote, const char *s, va_list ap) {
     printf("\n");
 }
 
+void legato_note_on (struct note_t *new_note, struct note_t *old_note, void* port_buf, int i) {
+    unsigned char* buffer;
+
+    buffer = jack_midi_event_reserve(port_buf, i, 3);
+    buffer[2] = MIDI_PEDAL_ON;
+    buffer[1] = MIDI_CC_LEGATO_PEDAL;
+    buffer[0] = MIDI_CONTROL_CHANGE + (*new_note).midi_channel - 1;
+
+    buffer = jack_midi_event_reserve(port_buf, i, 3);
+    buffer[2] = (*new_note).velocity;        /* velocity */
+    buffer[1] = (*new_note).note_number;     /* note number */
+    buffer[0] = MIDI_NOTE_ON + (*new_note).midi_channel - 1;
+
+    if ((*old_note).velocity != 0) {
+        buffer = jack_midi_event_reserve(port_buf, i, 3);
+        buffer[2] = (*old_note).velocity; /* velocity */
+        buffer[1] = (*old_note).note_number; /* previous note played on string */
+        buffer[0] = MIDI_NOTE_OFF + (*old_note).midi_channel - 1;    /* note off */
+    }
+    (*old_note).velocity = 0;
+
+    buffer = jack_midi_event_reserve(port_buf, i, 3);
+    buffer[2] = MIDI_PEDAL_OFF;
+    buffer[1] = MIDI_CC_LEGATO_PEDAL;
+    buffer[0] = MIDI_CONTROL_CHANGE + (*new_note).midi_channel - 1;
+
+}
+
+
 void note_on (struct note_t note, void* port_buf, int i) {
     unsigned char* buffer;
     int use_midi_channel = note.midi_channel ? note.midi_channel : USE_MIDI_CHANNEL;
     struct note_t current_note;
+
+    // copy the information neccessary to end the note as configured
     current_note.velocity = note.velocity;
     current_note.note_number = note.note_number + state.transpose;
     current_note.midi_channel = use_midi_channel;
     current_note.sustain_mode = note.sustain_mode;
     current_note.string = note.string;
+    current_note.legato = note.legato;
 
     if (current_note.sustain_mode == SUSTAIN_STRING) {
     	if (state.sustain_string[current_note.string].velocity != 0) {
@@ -463,24 +495,28 @@ void note_on (struct note_t note, void* port_buf, int i) {
     	state.sustain_string[current_note.string] = current_note;
     } else {
         if (current_note.string != 0) {
-            if (state.string[current_note.string].velocity != 0) {
+            if (current_note.legato == 1) {
+                legato_note_on(&current_note, &(state.string[current_note.string]), port_buf, i);
+            } else {
+                if (state.string[current_note.string].velocity != 0) {
+                    buffer = jack_midi_event_reserve(port_buf, i, 3);
+                    buffer[2] = state.string[current_note.string].velocity; /* velocity */
+                    buffer[1] = state.string[current_note.string].note_number; /* previous note played on string */
+                    buffer[0] = MIDI_NOTE_OFF + state.string[current_note.string].midi_channel - 1;    /* note off */
+                }
+
                 buffer = jack_midi_event_reserve(port_buf, i, 3);
-                buffer[2] = state.string[current_note.string].velocity; /* velocity */
-                buffer[1] = state.string[current_note.string].note_number; /* previous note played on string */
-                buffer[0] = MIDI_NOTE_OFF + state.string[current_note.string].midi_channel - 1;    /* note off */
+                buffer[2] = current_note.velocity;        /* velocity */
+                buffer[1] = current_note.note_number;     /* note number */
+                buffer[0] = MIDI_NOTE_ON + current_note.midi_channel - 1;
             }
-
-            buffer = jack_midi_event_reserve(port_buf, i, 3);
-            buffer[2] = current_note.velocity;        /* velocity */
-            buffer[1] = current_note.note_number;     /* note number */
-            buffer[0] = MIDI_NOTE_ON + use_midi_channel - 1;
-
             state.string[current_note.string] = current_note;
         } else {
     	    buffer = jack_midi_event_reserve(port_buf, i, 3);
-    	    buffer[2] = note.velocity;        /* velocity */
-    	    buffer[1] = note.note_number + state.transpose;    /* note number */
-    	    buffer[0] = MIDI_NOTE_ON + use_midi_channel - 1;    /* note on */
+    	    buffer[2] = current_note.velocity;        /* velocity */
+    	    buffer[1] = current_note.note_number;    /* note number */
+    	    buffer[0] = MIDI_NOTE_ON + current_note.midi_channel - 1;    /* note on */
+
     	    state.active_notes.note[state.active_notes.size] = current_note;
     	    state.active_notes.size++;
         }
@@ -1293,6 +1329,13 @@ void readNote (xmlNode *note_element, struct note_t *noteData) {
         printf("\tstring: %d", string);
     }
     (*noteData).string = string;
+
+    if (xmlGetProp(note_element, "legato")) {
+        (*noteData).legato = 1;
+        printf("\tlegato");
+    } else {
+        (*noteData).legato = 0;
+    }
 
     if (xmlGetProp(note_element, "sustain")) {
         sscanf(xmlGetProp(note_element, "sustain"), "%s", sustainString);
