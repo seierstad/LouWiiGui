@@ -55,5 +55,128 @@
         </chord>
       </chords>
     </bank>
+    <bank>
+      <sequences>
+        <sequence>
+          <chord>
+            <note note_number="62" velocity="100" string="4" />
+          </chord>
+          <chord>
+            <note note_number="74" velocity="100" string="2" />
+          </chord>
+          <chord>
+            <note note_number="69" velocity="100" string="3" />
+          </chord>
+        </sequence>
+        <sequence red="true">
+          <chord>
+            <note note_number="64" velocity="100" string="4" />
+          </chord>
+          <chord>
+            <note note_number="74" velocity="100" string="2" />
+          </chord>
+          <chord>
+            <note note_number="67" velocity="100" string="3" />
+          </chord>
+        </sequence>
+        <sequence red="true" yellow="true">
+          <chord>
+            <note note_number="65" velocity="100" string="4" />
+          </chord>
+          <chord>
+            <note note_number="74" velocity="100" string="2" />
+          </chord>
+          <chord>
+            <note note_number="67" velocity="100" string="3" />
+          </chord>
+        </sequence>
+        <sequence red="true" yellow="true" blue="true">
+          <chord>
+            <note note_number="76" velocity="100" string="1" />
+          </chord>
+          <chord>
+            <note note_number="74" velocity="100" string="2" />
+          </chord>
+          <chord>
+            <note note_number="67" velocity="100" string="3" />
+          </chord>
+          <chord>
+            <note note_number="74" velocity="100" string="2" />
+          </chord>
+        </sequence>
+        <sequence green="true" reset_to="1">
+          <chord>
+            <note note_number="42" velocity="100" string="7" midi_channel="3" />
+            <note note_number="62" velocity="100" string="4" />
+          </chord>
+          <chord>
+            <note note_number="74" velocity="100" string="2" />
+          </chord>
+          <chord>
+            <note note_number="69" velocity="100" string="3" />
+          </chord>
+          <chord>
+            <note note_number="62" velocity="100" string="4" />
+          </chord>
+        </sequence>
+        <sequence green="true" red="true" reset_to="1">
+          <chord>
+            <note note_number="43" velocity="100" string="7" midi_channel="3" />
+            <note note_number="64" velocity="100" string="4" />
+          </chord>
+          <chord>
+            <note note_number="74" velocity="100" string="2" />
+          </chord>
+          <chord>
+            <note note_number="67" velocity="100" string="3" />
+          </chord>
+          <chord>
+            <note note_number="64" velocity="100" string="4" />
+          </chord>
+        </sequence>
+        <sequence green="true" red="true" yellow="true" reset_to="1">
+          <chord>
+            <note note_number="46" velocity="100" string="7" midi_channel="3" />
+            <note note_number="65" velocity="100" string="4" />
+          </chord>
+          <chord>
+            <note note_number="74" velocity="100" string="2" />
+          </chord>
+          <chord>
+            <note note_number="67" velocity="100" string="3" />
+          </chord>
+          <chord>
+            <note note_number="65" velocity="100" string="4" />
+          </chord>
+        </sequence>
+        <sequence green="true" red="true" yellow="true" blue="true" reset_to="1">
+          <chord>
+            <note note_number="45" velocity="100" string="7" midi_channel="3" />
+            <note note_number="64" velocity="100" string="4" />
+          </chord>
+          <chord>
+            <note note_number="74" velocity="100" string="2" />
+          </chord>
+          <chord>
+            <note note_number="67" velocity="100" string="3" />
+          </chord>
+          <chord>
+            <note note_number="64" velocity="100" string="4" />
+          </chord>
+          <chord>
+            <note note_number="76" velocity="100" string="1" />
+          </chord>
+          <chord>
+            <note note_number="74" velocity="100" string="2" />
+          </chord>
+          <chord>
+            <note note_number="67" velocity="100" string="3" />
+          </chord>
+          <chord>
+            <note note_number="74" velocity="100" string="2" />
+          </chord>
+        </sequence>
+      </sequences>
+    </bank>
   </banks>
 </patch>

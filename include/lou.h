@@ -264,10 +264,11 @@ struct chord_t {
 
 struct sequence_t {
 	uint32_t frets;
-	int length;
+	unsigned char length;
 	struct chord_t* step;
-	unsigned char keep_position;
 	unsigned char position;
+	unsigned char keep_position;
+	unsigned int reset_to;
 	int shared_counter;
 	char reset_shared_counter;
 };
@@ -309,6 +310,7 @@ struct scaled_message_t {
 struct counter_t {
 	int length;
 	int position;
+	unsigned int reset_to;
 };
 
 

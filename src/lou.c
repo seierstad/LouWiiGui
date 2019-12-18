@@ -915,7 +915,7 @@ int process(jack_nframes_t nframes, void *arg) {
     		            	} 
     		            	strum_chord((*sequence).step[(bank[state.selected_bank].counter[(*sequence).shared_counter].position++) % (*sequence).length], strummer_direction, port_buf, i);
     		            	if (bank[state.selected_bank].counter[(*sequence).shared_counter].position == bank[state.selected_bank].counter[(*sequence).shared_counter].length) {
-    		            		bank[state.selected_bank].counter[(*sequence).shared_counter].position = 0;
+    		            		bank[state.selected_bank].counter[(*sequence).shared_counter].position = bank[state.selected_bank].counter[(*sequence).shared_counter].reset_to;
     		            	}
     		            } else {
     		            	if (state.chord != state.previous_strummed_chord) {
@@ -925,7 +925,7 @@ int process(jack_nframes_t nframes, void *arg) {
     		            	}
     		            	strum_chord((*sequence).step[(*sequence).position++], strummer_direction, port_buf, i);
     		            	if ((*sequence).position == (*sequence).length) {
-    		            		(*sequence).position = 0;
+    		            		(*sequence).position = (*sequence).reset_to;
     		            	}
     		            }
                     }
@@ -1582,6 +1582,11 @@ void readCounter(xmlNode *node, struct counter_t* counter) {
     if (xmlGetProp(node, "length")) {
         sscanf(xmlGetProp(node, "length"), "%d", &(*counter).length);
     }
+    if (xmlGetProp(node, "reset_to")) {
+        sscanf(xmlGetProp(node, "reset_to"), "%d", &(*counter).reset_to);
+    } else {
+        (*counter).reset_to = 0;
+    }
     (*counter).position = 0;
 }
 
@@ -1832,6 +1837,12 @@ struct sequence_t readSequence (xmlNode *sequenceNode, struct sequence_t *sequen
     if (xmlGetProp(sequenceNode, "keep_position")) {
         (*sequence).keep_position = 1;
     }
+    if (xmlGetProp(sequenceNode, "reset_to")) {
+        sscanf(xmlGetProp(sequenceNode, "reset_to"), "%u", &(*sequence).reset_to);
+    } else {
+        (*sequence).reset_to = 0;
+    }
+
     (*sequence).step = malloc((*sequence).length * sizeof(struct chord_t));
     (*sequence).position = 0;
 
