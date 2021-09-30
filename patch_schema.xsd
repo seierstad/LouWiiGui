@@ -27,19 +27,27 @@
 		<xsd:attribute name="string" type="xsd:nonNegativeInteger" use="optional" />
 	</xsd:complexType>
 
-	<xsd:complexType name="ccMessageType">
+	<xsd:complexType name="staticMessageType">
+		<xsd:attribute name="type" use="required">
+			<xsd:simpleType>
+				<xsd:restriction base="xsd:string">
+					<xsd:enumeration value="cc" />
+					<xsd:enumeration value="pitch" />
+					<xsd:enumeration value="rtc" />
+				</xsd:restriction>
+			</xsd:simpleType>
+		</xsd:attribute>
+
 		<xsd:attribute name="midi_channel" type="xsd:nonNegativeInteger" use="optional" />
 		<xsd:attribute name="parameter" type="xsd:nonNegativeInteger" use="required" />
 		<xsd:attribute name="value" type="xsd:nonNegativeInteger" use="required" />
 	</xsd:complexType>
 
-	<xsd:complexType name="ccMessagesType">
-		<xsd:attribute name="number_of_messages" type="xsd:nonNegativeInteger" use="required" />
+	<xsd:complexType name="staticMessagesType">
 		<xsd:sequence>
 			<xsd:element name="message" type="ccMessageType" maxOccurs="unbounded" />
 		</xsd:sequence>
 	</xsd:complexType>
-
 
 	<xsd:complexType name="scaledMessageType">
 		<xsd:attribute name="type" use="required">
@@ -63,7 +71,6 @@
 			<xsd:element name="scaled_message" type="scaledMessageType" maxOccurs="unbounded" />
 		</xsd:sequence>
 	</xsd:complexType>
-
 
 	<xsd:complexType name="chordType">
 		<xsd:attribute name="name"   type="xsd:string"  use="optional" />
@@ -152,7 +159,7 @@
 		<xsd:attribute name="name" type="xsd:string" use="optional" />
 
 		<xsd:element name="midi_configuration" type="midiConfigurationType" minOccurs="0" maxOccurs="unbound" />
-		<xsd:element name="cc" type="ccMessagesType" minOccurs="0" maxOccurs="unbound" />
+		<xsd:element name="midi_static" type="staticMessagesType" minOccurs="0" maxOccurs="unbound" />
 
 		<xsd:element name="banks">
 			<xsd:sequence>

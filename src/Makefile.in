@@ -99,12 +99,13 @@ am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(am__DIST_COMMON)
 mkinstalldirs = $(install_sh) -d
-CONFIG_HEADER = $(top_builddir)/include/config.h
+CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
-am_louwiigui_OBJECTS = lou.$(OBJEXT)
+am_louwiigui_OBJECTS = lou.$(OBJEXT) midi.$(OBJEXT) \
+	xml_file_io.$(OBJEXT)
 louwiigui_OBJECTS = $(am_louwiigui_OBJECTS)
 louwiigui_LDADD = $(LDADD)
 AM_V_lt = $(am__v_lt_@AM_V@)
@@ -123,10 +124,11 @@ AM_V_at = $(am__v_at_@AM_V@)
 am__v_at_ = $(am__v_at_@AM_DEFAULT_V@)
 am__v_at_0 = @
 am__v_at_1 = 
-DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)/include
+DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__maybe_remake_depfiles = depfiles
-am__depfiles_remade = ./$(DEPDIR)/lou.Po
+am__depfiles_remade = ./$(DEPDIR)/lou.Po ./$(DEPDIR)/midi.Po \
+	./$(DEPDIR)/xml_file_io.Po
 am__mv = mv -f
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
@@ -302,7 +304,7 @@ top_srcdir = @top_srcdir@
 ACLOCAL_AMFLAGS = -I m4
 AM_CPPFLAGS = -I$(srcdir)/../include
 AM_CFLAGS = -lrt $(XMLLIB_CFLAGS)
-louwiigui_SOURCES = lou.c lou.h
+louwiigui_SOURCES = lou.c lou.h midi.c midi.h xml_file_io.c xml_file_io.h
 all: all-am
 
 .SUFFIXES:
@@ -397,6 +399,8 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lou.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/midi.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xml_file_io.Po@am__quote@ # am--include-marker
 
 $(am__depfiles_remade):
 	@$(MKDIR_P) $(@D)
@@ -559,6 +563,8 @@ clean-am: clean-binPROGRAMS clean-generic clean-libtool mostlyclean-am
 
 distclean: distclean-am
 		-rm -f ./$(DEPDIR)/lou.Po
+	-rm -f ./$(DEPDIR)/midi.Po
+	-rm -f ./$(DEPDIR)/xml_file_io.Po
 	-rm -f Makefile
 distclean-am: clean-am distclean-compile distclean-generic \
 	distclean-tags
@@ -605,6 +611,8 @@ installcheck-am:
 
 maintainer-clean: maintainer-clean-am
 		-rm -f ./$(DEPDIR)/lou.Po
+	-rm -f ./$(DEPDIR)/midi.Po
+	-rm -f ./$(DEPDIR)/xml_file_io.Po
 	-rm -f Makefile
 maintainer-clean-am: distclean-am maintainer-clean-generic
 

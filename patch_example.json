@@ -1,0 +1,18 @@
+[{
+	"name": "verse",
+	"chords": [{
+		"number_of_notes": 6,
+		"notes": [
+			{"note_number": 43, "velocity": 100, "delay": 0},
+			{"note_number": 50, "velocity": 100, "delay": 5},
+			{"note_number": 55, "velocity": 100, "delay": 7},
+			{"note_number": 59, "velocity": 100, "delay": 11},
+			{"note_number": 62, "velocity": 100, "delay": 14},
+			{"note_number": 67, "velocity": 110, "delay": 19}
+		]
+	}]
+}, {
+
+}, {
+
+}]

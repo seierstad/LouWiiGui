@@ -6080,7 +6080,7 @@ esac
 fi
 
 : ${AR=ar}
-: ${AR_FLAGS=cru}
+: ${AR_FLAGS=cr}
 
 
 
@@ -7801,8 +7801,8 @@ int forced_loaded() { return 2;}
 _LT_EOF
       echo "$LTCC $LTCFLAGS -c -o conftest.o conftest.c" >&5
       $LTCC $LTCFLAGS -c -o conftest.o conftest.c 2>&5
-      echo "$AR cru libconftest.a conftest.o" >&5
-      $AR cru libconftest.a conftest.o 2>&5
+      echo "$AR cr libconftest.a conftest.o" >&5
+      $AR cr libconftest.a conftest.o 2>&5
       echo "$RANLIB libconftest.a" >&5
       $RANLIB libconftest.a 2>&5
       cat > conftest.c << _LT_EOF
@@ -12231,8 +12231,7 @@ CC=$lt_save_CC
 
 
 
-
-
+#AC_CONFIG_AUX_DIR([build-aux])
 
 ac_ext=c
 ac_cpp='$CPP $CPPFLAGS'
@@ -12937,10 +12936,10 @@ _ACEOF
 
 
 
-#AC_CONFIG_HEADER(include/config.h)
-ac_config_headers="$ac_config_headers include/config.h"
 
 ac_config_files="$ac_config_files Makefile src/Makefile"
+
+ac_config_headers="$ac_config_headers config.h"
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for jack_client_open in -ljack" >&5
 $as_echo_n "checking for jack_client_open in -ljack... " >&6; }
@@ -13132,7 +13131,7 @@ fi
 
 
 XML_CFLAGS="`pkg-config libxml-2.0 --cflags`"
-#XML_LDFLAGS="`pkg-config libxml-2.0 --libs-only-L`"
+XML_LDFLAGS="`pkg-config libxml-2.0 --libs-only-L`"
 XML_LIBS="`pkg-config libxml-2.0 --libs-only-l`"
 
 
@@ -13377,7 +13376,7 @@ if ac_fn_c_try_link "$LINENO"; then :
           echo "*** you may also be able to get things to work by modifying LD_LIBRARY_PATH"
 else
    echo "*** The test program failed to compile or link. See the file config.log for the"
-          echo "*** exact error that occured. This usually means LIBXML was incorrectly installed"
+          echo "*** exact error that occurred. This usually means LIBXML was incorrectly installed"
           echo "*** or that you have moved LIBXML since it was installed. In the latter case, you"
           echo "*** may want to edit the xml2-config script: $XML2_CONFIG"
 fi
@@ -14821,9 +14820,9 @@ do
   case $ac_config_target in
     "depfiles") CONFIG_COMMANDS="$CONFIG_COMMANDS depfiles" ;;
     "libtool") CONFIG_COMMANDS="$CONFIG_COMMANDS libtool" ;;
-    "include/config.h") CONFIG_HEADERS="$CONFIG_HEADERS include/config.h" ;;
     "Makefile") CONFIG_FILES="$CONFIG_FILES Makefile" ;;
     "src/Makefile") CONFIG_FILES="$CONFIG_FILES src/Makefile" ;;
+    "config.h") CONFIG_HEADERS="$CONFIG_HEADERS config.h" ;;
 
   *) as_fn_error $? "invalid argument: \`$ac_config_target'" "$LINENO" 5;;
   esac

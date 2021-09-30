@@ -4,11 +4,12 @@
 		<program_change program="13" />
 		<program_change program="1" channel="3" />
 	</midi_configuration>
-	<cc>
-		<message parameter="7" value="48" />
-		<message midi_channel="2" parameter="7" value="46" />
-		<message midi_channel="3" parameter="7" value="44" />
-	</cc>
+	<midi_static>
+		<message type="cc" parameter="7" value="48" />
+		<message type="cc" midi_channel="2" parameter="7" value="46" />
+		<message type="cc" midi_channel="3" parameter="7" value="44" />
+		<message type="rtc" command="start" />
+	</midi_static>
 	<stick>
 		<target>
 			<scaled_message type="cc" min="0" max="127" cc="volume" />
@@ -42,23 +43,30 @@
 				<scaled_message type="pitch" min="8192" max="0" midi_channel="3" />
 				<scaled_message type="cc"    min="127"  max="0" in_min="8" in_max="18" cc="74" />
 			</touchbar>
-			<cc>
-				<message parameter="7" value="127" />
-			</cc>
+			<midi_static>
+				<message type="cc" parameter="7" value="127" />
+				<message type="clock" command="stop" />
+			</midi_static>
 			<chords>
 				<chord>
 					<note note_number="55" velocity="100" />
 					<note note_number="62" velocity="110" />
 					<note note_number="67" velocity="110" string="1" />
-					<cc>
-						<before_strum />
-						<after_strum>
-							<message parameter="legato_pedal" value="pedal_on" />
-						</after_strum>
+					<midi_static>
+						<before_first_strum>
+							<message type="clock" command="start" />
+						</before_first_strum>
+						<before_each_strum>
+							<message type="clock" command="continue" />
+						</before_each_strum>
+						<after_each_strum>
+							<message type="clock" command="stop" />
+							<message type="cc" parameter="legato_pedal" value="pedal_on" />
+						</after_each_strum>
 						<before_mute>
-							<message parameter="legato_pedal" value="pedal_on" />
+							<message type="cc" parameter="legato_pedal" value="pedal_off" />
 						</before_mute>
-					</cc>
+					</midi_static>
 					<variations>
 						<chord green="true">
 							<note note_number="68" velocity="110" string="1" />
@@ -233,6 +241,9 @@
 				<program_change channel="1" program="21" />
 				<program_change channel="3" program="38" />
 			</midi_configuration>
+			<midi_static>
+				<message type="clock" command="start" />
+			</midi_static>
 			<sequence_counters>
 				<counter length="5" />
 				<counter length="3" />
@@ -340,10 +351,10 @@
 			<touchbar>
 				<scaled_message type="cc" cc="resonance" min="127" max="127" in_min="touch_3rd" in_max="touch_3rd" />
 			</touchbar>
-			<cc>
-				<message parameter="80" value="2" />
-				<message parameter="71" value="110" />
-			</cc>
+			<midi_static>
+				<message type="cc" parameter="80" value="2" />
+				<message type="cc" parameter="71" value="110" />
+			</midi_static>
 			<chords>
 				<chord name="single note E">
 					<note note_number="28" velocity="100" midi_channel="3" />

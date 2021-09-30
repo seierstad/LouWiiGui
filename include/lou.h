@@ -1,68 +1,13 @@
+/* lou.h - LouWiiGui, a Wii Guitar MIDI controller */
 
+#ifndef _LOU_H
+#define _LOU_H
+
+#include <signal.h>
+#include <cwiid.h>
 
 #define MY_ENCODING "UTF-8"
 
-// amount of whammy movement before sending midi
-#define MIDI_PITCH_MAX       0x3FFF
-#define MIDI_PITCH_CENTER    0x2000
-#define MIDI_PITCH_MIN       0x0000
-#define MIDI_MODULATION_MAX  0x7F
-#define MIDI_CC2_MAX         0x3FFF
-#define MIDI_CC2_MID         0x2000
-#define MIDI_CC2_MIN         0x0000
-#define MIDI_PEDAL_ON		 0x7F
-#define MIDI_PEDAL_OFF		 0x00
-
-#define MIDI_DATA_NULL       0xFFFF
-
-#define MIDI_NOTE_OFF       0x80
-#define MIDI_NOTE_ON        0x90
-#define MIDI_PROGRAM_CHANGE 0xC0
-#define MIDI_PITCH_WHEEL    0xE0
-#define MIDI_CONTROL_CHANGE 0xB0
-
-#define MIDI_CC_BANK_SELECT_MSB     0x00
-#define MIDI_CC_BANK_SELECT_LSB     0x20
-#define MIDI_CC_MODULATION_MSB      0x01
-#define MIDI_CC_MODULATION_LSB      0x21
-#define MIDI_CC_BREATH_CTL_MSB      0x02
-#define MIDI_CC_BREATH_CTL_LSB      0x22
-#define MIDI_CC_FOOT_CTL_MSB        0x04
-#define MIDI_CC_FOOT_CTL_LSB        0x24
-#define MIDI_CC_PORTAMENTO_TIME_MSB 0x05
-#define MIDI_CC_PORTAMENTO_TIME_LSB 0x25
-#define MIDI_CC_DATA_ENTRY_MSB      0x06
-#define MIDI_CC_DATA_ENTRY_LSB      0x26
-#define MIDI_CC_VOLUME_MSB          0x07
-#define MIDI_CC_VOLUME_LSB          0x27
-#define MIDI_CC_BALANCE_MSB         0x08
-#define MIDI_CC_BALANCE_LSB         0x28
-#define MIDI_CC_PAN_MSB             0x0A
-#define MIDI_CC_PAN_LSB             0x2A
-#define MIDI_CC_EXPRESSION_MSB      0x0B
-#define MIDI_CC_EXPRESSION_LSB      0x2B
-#define MIDI_CC_EFFECT_CTL_1_MSB    0x0C
-#define MIDI_CC_EFFECT_CTL_1_LSB    0x2C
-#define MIDI_CC_EFFECT_CTL_2_MSB    0x0D
-#define MIDI_CC_EFFECT_CTL_2_LSB    0x2D
-#define MIDI_CC_GENERAL_CTL_1_MSB   0x10
-#define MIDI_CC_GENERAL_CTL_1_LSB   0x30
-#define MIDI_CC_GENERAL_CTL_2_MSB   0x11
-#define MIDI_CC_GENERAL_CTL_2_LSB   0x31
-#define MIDI_CC_GENERAL_CTL_3_MSB   0x12
-#define MIDI_CC_GENERAL_CTL_3_LSB   0x32
-#define MIDI_CC_GENERAL_CTL_4_MSB   0x13
-#define MIDI_CC_GENERAL_CTL_4_LSB   0x33
-#define MIDI_CC_SUSTAIN_PEDAL       0x40
-#define MIDI_CC_PORTAMENTO_PEDAL    0x41
-#define MIDI_CC_SOSTENUTO_PEDAL     0x42
-#define MIDI_CC_SOFT_PEDAL          0x43
-#define MIDI_CC_LEGATO_PEDAL        0x44
-#define MIDI_CC_SOUND_VARIATION     0x46
-#define MIDI_CC_RESONANCE           0x47
-#define MIDI_CC_RELEASE_TIME        0x48
-#define MIDI_CC_ATTACK_TIME         0x49
-#define MIDI_CC_BRIGHTNESS          0x4A
 
 #define MAX_ACTIVE_NOTES_COUNT   120
 #define MAX_QUEUED_NOTES_COUNT   120
@@ -105,6 +50,22 @@
 #define STICK_ROTATION_ZONE_THRESHOLD 5
 
 
+enum midi_message_type_t {
+	MIDI_MESSAGE_TYPE_UNKNOWN,
+	MIDI_MESSAGE_TYPE_NOTE_ON,
+	MIDI_MESSAGE_TYPE_NOTE_OFF,
+	MIDI_MESSAGE_TYPE_PITCH_SHIFT,
+	MIDI_MESSAGE_TYPE_CC,
+	MIDI_MESSAGE_TYPE_RTC
+};
+
+enum rtc_message_type_t {
+	RTC_MSG_TYPE_UNKNOWN,
+	RTC_MSG_TYPE_TIMING,
+	RTC_MSG_TYPE_START,
+	RTC_MSG_TYPE_STOP,
+	RTC_MSG_TYPE_CONTINUE
+};
 
 enum strummer_state_t {
 	STRUMMER_STATE_MID,
@@ -255,7 +216,7 @@ struct note_t {
 struct chord_t {
 	uint8_t frets;
 	int size;
-	struct note_t * note;
+	struct note_t* note;
 	int touchbar_length;
 	struct scaled_message_t *touchbar;
 	unsigned char variation_count;
@@ -273,10 +234,68 @@ struct sequence_t {
 	char reset_shared_counter;
 };
 
+struct clock_message_t {
+	enum rtc_message_type_t command;
+};
+
 struct cc_message_t {
 	int channel;
 	int parameter;
 	int value;
+};
+
+struct pitch_bend_message_t {
+	int channel;
+	int value;
+};
+
+enum note_message_type {
+	NOTE_ON_MESSAGE,
+	NOTE_OFF_MESSAGE
+};
+
+struct note_message_t {
+	enum note_message_type type;
+	int channel;
+	int note;
+	int velocity;
+};
+
+struct program_change_message_t {
+	int channel;
+	int bank; // 1-16384
+	int program; // 1-128
+};
+
+struct channel_aftertouch_message_t {
+	int channel;
+	int pressure;
+};
+
+struct key_pressure_message_t {
+	int channel;
+	int note;
+	int pressure;
+};
+
+struct song_select_message_t {
+	int song;
+};
+
+struct song_position_pointer_message_t {
+	int position;
+};
+
+union static_message_t {
+	struct cc_message_t cc;
+	struct clock_message_t clock;
+	struct note_message_t note;
+	struct program_change_message_t program;
+	struct pitch_bend_message_t pitch;
+	struct channel_aftertouch_message_t channel_pressure;
+	struct key_pressure_message_t key_pressure;
+	struct song_position_pointer_message_t position;
+	struct song_select_message_t song;
 };
 
 struct midi_program_change_t {
@@ -319,12 +338,17 @@ struct stick_target_t {
 	struct scaled_message_t *messages;
 };
 
+struct midi_static_messages_t {
+	int length;
+	unsigned char *type;
+	union static_message_t *message;
+};
+
 struct patch_t {
 	char name[MAX_NAME_LENGTH];
 	struct midi_configuration_t midi;
 	int number_of_banks;
-	int cc_length;
-	struct cc_message_t *cc;
+	struct midi_static_messages_t *midi_static_messages;
 	int whammy_length;
 	struct scaled_message_t *whammy;
 	int touchbar_length;
@@ -419,7 +443,7 @@ struct bank_t {
 	unsigned char chord_count;
 	struct sequence_t *sequence;
 	unsigned char sequence_count;
-	int cc_length;
+	struct midi_static_messages_t *midi_static_messages;
 	struct cc_message_t *cc;
 	unsigned int whammy_length;
 	struct scaled_message_t *whammy;
@@ -430,29 +454,12 @@ struct bank_t {
 };
 
 #define MAX_BANKS_COUNT 3
-struct patch_t patch;
-struct bank_t *bank;
-struct state_t state;
-struct chord_t empty_chord;
 
-jack_client_t *client;
-jack_port_t *output_port;
-jack_port_t *input_port;
-
-unsigned char* note_frqs;
-jack_nframes_t* note_starts;
-jack_nframes_t* note_lengths;
-jack_nframes_t num_notes;
-jack_nframes_t loop_nsamp;
-jack_nframes_t loop_index;
-
-timer_t countdown_id;
-struct itimerspec margin;
-struct itimerspec time_left;
-
-cwiid_wiimote_t *wiimote;	/* wiimote handle */
-cwiid_mesg_callback_t cwiid_callback;
 
 struct range_t whammy_range;
 struct range_t touchbar_range;
 struct range_t stick_range;
+
+
+
+ #endif /* _LOU_H */
